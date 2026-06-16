@@ -6,7 +6,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Serve the HTML file when a user visits the root URL
+// Serve the HTML file
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/index.html');
 });
@@ -15,9 +15,9 @@ app.get('/', (req, res) => {
 io.on('connection', (socket) => {
   console.log('🟢 A user connected!');
 
-  // Broadcast the message to everyone when the server receives it
-  socket.on('chat message', (msg) => {
-    io.emit('chat message', msg); 
+  // Receive the message object { user, text } and broadcast it to everyone
+  socket.on('chat message', (data) => {
+    io.emit('chat message', data); 
   });
 
   socket.on('disconnect', () => {
@@ -25,8 +25,8 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start the server on port 3000
+// Start the server
 const PORT = 3000;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(` Chat server is running at http://192.168.100.92:${PORT}`);
+  console.log(`🚀 Chat server is running at http://192.168.100.92:${PORT}`);
 });

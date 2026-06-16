@@ -4,16 +4,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Late Night Chat</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #1e1e1e; color: #fff; }
-    ul { list-style-type: none; padding: 0; margin-bottom: 60px; }
-    li { padding: 10px; margin-bottom: 8px; background: #333; border-radius: 8px; width: fit-content; }
-    form { display: flex; position: fixed; bottom: 0; left: 0; width: 100%; padding: 10px; background: #222; box-sizing: border-box; }
-    input { flex-grow: 1; padding: 12px; border: none; border-radius: 5px; margin-right: 10px; }
-    button { padding: 12px 20px; border: none; background: #007bff; color: white; border-radius: 5px; cursor: pointer; font-weight: bold; }
+    /* Modern Dark Theme Styling */
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background: #0b141a; color: #e9edef; display: flex; flex-direction: column; height: 100vh; }
+    .header { background: #202c33; padding: 15px; text-align: center; font-weight: bold; font-size: 1.2em; box-shadow: 0 1px 3px rgba(0,0,0,0.5); z-index: 10; }
+    
+    /* Chat Container */
+    #messages { list-style-type: none; padding: 20px; margin: 0; flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+    
+    /* Chat Bubbles */
+    .message { max-width: 75%; padding: 10px 15px; border-radius: 15px; position: relative; word-wrap: break-word; display: inline-block; box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+    .message-other { background: #202c33; align-self: flex-start; border-top-left-radius: 0; }
+    .message-me { background: #005c4b; align-self: flex-end; border-top-right-radius: 0; }
+    
+    /* Sender Name */
+    .sender { font-size: 0.8em; font-weight: bold; margin-bottom: 5px; color: #53bdeb; }
+    .message-me .sender { display: none; } /* Hide your own name on your bubbles */
+    
+    /* Input Form */
+    form { display: flex; padding: 10px; background: #202c33; align-items: center; }
+    input { flex-grow: 1; padding: 15px; border: none; border-radius: 20px; background: #2a3942; color: white; margin-right: 10px; outline: none; font-size: 1em; }
+    button { padding: 15px 25px; border: none; background: #00a884; color: white; border-radius: 20px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 1em; }
+    button:hover { background: #008f6f; }
   </style>
 </head>
 <body>
-  <h2> Live Chat Room (Ubuntu Server)</h2>
+  <div class="header">📡 Live Chat Room</div>
   <ul id="messages"></ul>
   
   <form id="form" action="">
@@ -27,22 +42,37 @@
     var messages = document.getElementById('messages');
     var form = document.getElementById('form');
     var input = document.getElementById('input');
+    
+    // Prompt user for their name upon entering the room
+    var username = prompt("Welcome! Please enter your name:") || "Anonymous";
 
-    // Emit message when the form is submitted
+    // Emit message and username when form is submitted
     form.addEventListener('submit', function(e) {
       e.preventDefault();
       if (input.value) {
-        socket.emit('chat message', input.value);
+        var msgData = { user: username, text: input.value };
+        socket.emit('chat message', msgData);
         input.value = '';
       }
     });
 
-    // Append new message to the list when received from the server
-    socket.on('chat message', function(msg) {
-      var item = document.createElement('li');
-      item.textContent = msg;
-      messages.appendChild(item);
-      window.scrollTo(0, document.body.scrollHeight);
+    // Handle incoming messages
+    socket.on('chat message', function(data) {
+      var li = document.createElement('li');
+      
+      // Determine if the message belongs to the current user or someone else
+      if(data.user === username) {
+        li.className = 'message message-me';
+        li.innerHTML = `<div>${data.text}</div>`;
+      } else {
+        li.className = 'message message-other';
+        li.innerHTML = `<div class="sender">${data.user}</div><div>${data.text}</div>`;
+      }
+      
+      messages.appendChild(li);
+      
+      // Auto-scroll to the bottom
+      messages.scrollTop = messages.scrollHeight;
     });
   </script>
 </body>
