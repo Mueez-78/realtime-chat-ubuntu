@@ -6,19 +6,30 @@
   <style>
     /* Modern Dark Theme Styling */
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background: #0b141a; color: #e9edef; display: flex; flex-direction: column; height: 100vh; }
-    .header { background: #202c33; padding: 15px; text-align: center; font-weight: bold; font-size: 1.2em; box-shadow: 0 1px 3px rgba(0,0,0,0.5); z-index: 10; }
+    
+    /* Modern Header */
+    .header { background: #202c33; padding: 12px 20px; display: flex; align-items: center; gap: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.5); z-index: 10; }
+    .avatar { width: 45px; height: 45px; background: #00a884; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5em; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+    .header-info { display: flex; flex-direction: column; justify-content: center; }
+    .header-title { font-weight: bold; font-size: 1.1em; color: #e9edef; margin-bottom: 2px; }
+    .header-status { font-size: 0.85em; color: #00a884; display: flex; align-items: center; gap: 5px; }
+    
+    /* Glowing Online Dot */
+    .dot { width: 8px; height: 8px; background-color: #00a884; border-radius: 50%; animation: pulse 2s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
     
     /* Chat Container */
     #messages { list-style-type: none; padding: 20px; margin: 0; flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
     
     /* Chat Bubbles */
-    .message { max-width: 75%; padding: 10px 15px; border-radius: 15px; position: relative; word-wrap: break-word; display: inline-block; box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+    .message { max-width: 75%; padding: 8px 12px 20px 12px; border-radius: 12px; position: relative; word-wrap: break-word; display: inline-block; box-shadow: 0 1px 2px rgba(0,0,0,0.3); min-width: 80px; }
     .message-other { background: #202c33; align-self: flex-start; border-top-left-radius: 0; }
     .message-me { background: #005c4b; align-self: flex-end; border-top-right-radius: 0; }
     
-    /* Sender Name */
-    .sender { font-size: 0.8em; font-weight: bold; margin-bottom: 5px; color: #53bdeb; }
-    .message-me .sender { display: none; } /* Hide your own name on your bubbles */
+    /* Sender Name & Timestamp */
+    .sender { font-size: 0.8em; font-weight: bold; margin-bottom: 3px; color: #53bdeb; }
+    .message-me .sender { display: none; }
+    .timestamp { font-size: 0.65em; color: rgba(255,255,255,0.6); position: absolute; bottom: 5px; right: 10px; }
     
     /* Input Form */
     form { display: flex; padding: 10px; background: #202c33; align-items: center; }
@@ -28,7 +39,16 @@
   </style>
 </head>
 <body>
-  <div class="header">📡 Live Chat Room</div>
+  <div class="header">
+    <div class="avatar">🐧</div>
+    <div class="header-info">
+      <div class="header-title">Ubuntu Live Lounge</div>
+      <div class="header-status">
+        <span class="dot"></span> Online
+      </div>
+    </div>
+  </div>
+  
   <ul id="messages"></ul>
   
   <form id="form" action="">
@@ -43,10 +63,43 @@
     var form = document.getElementById('form');
     var input = document.getElementById('input');
     
-    // Prompt user for their name upon entering the room
     var username = prompt("Welcome! Please enter your name:") || "Anonymous";
 
-    // Emit message and username when form is submitted
+    // Function to create and append a message safely (XSS Protected)
+    function appendMessage(data) {
+      var li = document.createElement('li');
+      li.className = (data.user === username) ? 'message message-me' : 'message message-other';
+      
+      // Prevent XSS by using textContent instead of innerHTML
+      if (data.user !== username) {
+        var senderDiv = document.createElement('div');
+        senderDiv.className = 'sender';
+        senderDiv.textContent = data.user;
+        li.appendChild(senderDiv);
+      }
+      
+      var textDiv = document.createElement('div');
+      textDiv.textContent = data.text;
+      li.appendChild(textDiv);
+      
+      var timeDiv = document.createElement('div');
+      timeDiv.className = 'timestamp';
+      timeDiv.textContent = data.time;
+      li.appendChild(timeDiv);
+      
+      messages.appendChild(li);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    // Load initial history
+    socket.on('load history', function(history) {
+      messages.innerHTML = ''; // Clear current messages to prevent duplication
+      history.forEach(function(data) {
+        appendMessage(data);
+      });
+    });
+
+    // Send new message
     form.addEventListener('submit', function(e) {
       e.preventDefault();
       if (input.value) {
@@ -56,23 +109,9 @@
       }
     });
 
-    // Handle incoming messages
+    // Receive new message
     socket.on('chat message', function(data) {
-      var li = document.createElement('li');
-      
-      // Determine if the message belongs to the current user or someone else
-      if(data.user === username) {
-        li.className = 'message message-me';
-        li.innerHTML = `<div>${data.text}</div>`;
-      } else {
-        li.className = 'message message-other';
-        li.innerHTML = `<div class="sender">${data.user}</div><div>${data.text}</div>`;
-      }
-      
-      messages.appendChild(li);
-      
-      // Auto-scroll to the bottom
-      messages.scrollTop = messages.scrollHeight;
+      appendMessage(data);
     });
   </script>
 </body>
