@@ -16,7 +16,7 @@ const RATE_LIMIT_MAX_MESSAGES = 5;
 
 // In-memory state
 const chatHistory = [];
-const connectedUsers = new Map(); // socket.id -> { username, messageTimestamps: [] }
+const connectedUsers = new Map(); // socket.id -> { username, avatar, messageTimestamps: [] }
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
@@ -53,23 +53,33 @@ function isRateLimited(user) {
 io.on('connection', (socket) => {
   console.log(`🟢 Socket connected: ${socket.id}`);
 
-  // Send existing history right away so it's ready before the user even sets a name
+  // Send existing history right away
   socket.emit('load history', chatHistory);
 
-  socket.on('set username', (rawUsername) => {
-    // Halang kemasukan tanpa nama yang sah (buang fallback 'Anonymous')
+  socket.on('set username', (data) => {
+    // Support both string format (old) or object format with avatar & flags (new)
+    const rawUsername = typeof data === 'string' ? data : data.name;
     const username = String(rawUsername || '').trim().slice(0, MAX_USERNAME_LENGTH);
     if (!username) return; 
 
-    connectedUsers.set(socket.id, { username, messageTimestamps: [] });
+    // Accept avatar if provided (limit string size to ~150KB to protect server)
+    let avatar = null;
+    if (data && data.avatar && typeof data.avatar === 'string' && data.avatar.length < 150000) {
+      avatar = data.avatar;
+    }
 
+    connectedUsers.set(socket.id, { username, avatar, messageTimestamps: [] });
     broadcastUserList();
-    // Mesej 'joined the chat' dipadamkan supaya tidak spam ketika refresh
+
+    // Only broadcast "joined the chat" if it's a genuinely new user (not a reconnect)
+    if (data && data.isNewUser) {
+      addSystemMessage(`${username} joined the chat`);
+    }
   });
 
   socket.on('chat message', (data) => {
     const user = connectedUsers.get(socket.id);
-    if (!user) return; // ignore messages from sockets that never set a username
+    if (!user) return; 
 
     if (isRateLimited(user)) {
       socket.emit('rate limited');
@@ -79,7 +89,12 @@ io.on('connection', (socket) => {
     const text = String((data && data.text) || '').trim().slice(0, MAX_MESSAGE_LENGTH);
     if (!text) return;
 
-    const messageData = { user: user.username, text, time: timestamp() };
+    const messageData = { 
+      user: user.username, 
+      avatar: user.avatar,
+      text, 
+      time: timestamp() 
+    };
     pushHistory(messageData);
     io.emit('chat message', messageData);
   });
@@ -99,12 +114,13 @@ io.on('connection', (socket) => {
     if (user) {
       connectedUsers.delete(socket.id);
       broadcastUserList();
-      // Mesej 'left the chat' dipadamkan supaya tidak spam ketika refresh
+      // Removed "left the chat" to prevent spam
     }
     console.log(`🔴 Socket disconnected: ${socket.id}`);
   });
 });
 
-server.listen(PORT, () => {
+// Listen on all IPs (0.0.0.0) so Cloudflare and local network can access it
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Chat server running at http://localhost:${PORT}`);
 });

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#0d0b1e" />
+<meta name="theme-color" content="#0b141a" />
 <title>Late Night Chat</title>
 <style>
   :root {
@@ -51,7 +51,7 @@
     background: var(--muted);
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; color: #fff;
+    flex-shrink: 0; color: #fff; overflow: hidden;
   }
   .header-info { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
   .header-title { font-weight: 500; font-size: 1.05em; color: var(--text); }
@@ -83,6 +83,28 @@
   .message { max-width: 75%; display: flex; flex-direction: column; }
   .message-other { align-self: flex-start; }
   .message-me { align-self: flex-end; }
+
+  .message-row { 
+    display: flex; 
+    align-items: flex-end; /* Memastikan avatar sentiasa berada di bawah buih mesej */
+    gap: 8px; 
+  }
+  .avatar-small {
+    width: 30px; 
+    height: 30px;
+    min-width: 30px; /* Wajib ada supaya ia kekal bulat dan tak meregang */
+    min-height: 30px;
+    border-radius: 50%;
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    font-size: 0.85em; 
+    font-weight: 700; 
+    color: #ffffff;
+    flex-shrink: 0; 
+    overflow: hidden;
+    margin-bottom: 2px; /* Selaraskan kedudukan dengan dasar mesej */
+  }
 
   .bubble {
     padding: 8px 10px 18px 10px;
@@ -116,7 +138,7 @@
   /* Input form */
   form {
     display: flex; align-items: center; padding: 10px 16px;
-    background: var(--surface); gap: 10px; flex-shrink: 0;
+    background: var(--surface); gap: 10px; flex-shrink: 0; position: relative;
   }
   .icon-btn {
     background: none; border: none; font-size: 1.4em; color: var(--muted);
@@ -179,7 +201,7 @@
   #toast.visible { opacity: 1; }
 
   /* =========================================
-     RESPONSIVE DESIGN (TELEFON PINTAR)
+     RESPONSIVE DESIGN (MOBILE SPECIFIC)
      ========================================= */
   @media screen and (max-width: 600px) {
     .header { padding: 10px 12px; gap: 10px; }
@@ -188,7 +210,7 @@
     #messages { padding: 12px 12px 8px; gap: 4px; }
     form { padding: 8px 10px; gap: 8px; }
     
-    /* Halang iOS Auto-Zoom */
+    /* Prevent iOS Auto-Zoom */
     input { font-size: 16px; padding: 10px 14px; }
     
     .emoji-panel { grid-template-columns: repeat(7, 1fr); left: 10px; max-width: 260px; }
@@ -199,11 +221,7 @@
 <body>
 
   <div class="header">
-    <div class="avatar">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="#fff"/>
-      </svg>
-    </div>
+    <div class="avatar">🐧</div>
     <div class="header-info">
       <div class="header-title">Ubuntu Live Lounge</div>
       <div class="header-status">
@@ -215,7 +233,7 @@
 
   <div class="chat-area">
     <ul id="messages"></ul>
-    <button class="scroll-bottom-btn" id="scroll-bottom-btn" type="button">↓ New messages</button>
+    <button class="scroll-bottom-btn" id="scroll-bottom-btn" type="button">↓</button>
     <div id="typing-indicator"></div>
   </div>
 
@@ -233,13 +251,13 @@
 
   <div class="modal-overlay" id="username-modal">
     <div class="modal-card">
-      <div class="avatar" style="margin: 0 auto;">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="#fff"/>
-        </svg>
-      </div>
+      <label for="avatar-upload" id="avatar-preview" style="cursor: pointer; margin: 0 auto 16px; display: block; width: 64px; height: 64px; border-radius: 50%; background: var(--input-bg); border: 2px dashed var(--muted); display: flex; align-items: center; justify-content: center; overflow: hidden; transition: all 0.2s;">
+        <span style="font-size: 24px;">📷</span>
+      </label>
+      <input type="file" id="avatar-upload" accept="image/*" style="display: none;" />
+      
       <h2>Welcome to the Lounge</h2>
-      <p>Enter a name to start chatting</p>
+      <p>Upload a photo and enter a name</p>
       <form id="username-form">
         <input id="username-input" maxlength="24" autocomplete="off" placeholder="Your name" required />
         <button type="submit">Start Chatting</button>
@@ -271,6 +289,7 @@
 
     const MAX_LEN = 500;
     let username = localStorage.getItem('chat_username') || '';
+    let userAvatar = localStorage.getItem('chat_avatar') || null;
     let lastKnownUserCount = 0;
     let typingTimeout = null;
     const typingUsers = new Set();
@@ -284,6 +303,32 @@
       return palette[hash % palette.length];
     }
 
+    // Avatar preview logic
+    const avatarUpload = document.getElementById('avatar-upload');
+    const avatarPreview = document.getElementById('avatar-preview');
+
+    if (userAvatar) {
+      avatarPreview.innerHTML = `<img src="${userAvatar}" style="width: 100%; height: 100%; object-fit: cover;" />`;
+      avatarPreview.style.border = "none";
+    }
+
+    avatarUpload.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        if (file.size > 100000) {
+          alert("Image is too large! Please select an image under 100KB.");
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          userAvatar = event.target.result;
+          avatarPreview.innerHTML = `<img src="${userAvatar}" style="width: 100%; height: 100%; object-fit: cover;" />`;
+          avatarPreview.style.border = "none";
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
     function showUsernameModal() {
       usernameModal.classList.add('visible');
       usernameInput.focus();
@@ -292,8 +337,11 @@
     function joinChat(name) {
       username = name;
       localStorage.setItem('chat_username', username);
+      if (userAvatar) localStorage.setItem('chat_avatar', userAvatar);
+      
       usernameModal.classList.remove('visible');
-      socket.emit('set username', username);
+      // Pass isNewUser: true when explicitly joining via the form
+      socket.emit('set username', { name: username, avatar: userAvatar, isNewUser: true });
       input.focus();
     }
 
@@ -311,7 +359,11 @@
       statusText.textContent = lastKnownUserCount
         ? `${lastKnownUserCount} ${lastKnownUserCount === 1 ? 'person' : 'people'} online`
         : 'Online';
-      if (username) socket.emit('set username', username);
+      
+      // Pass isNewUser: false when automatically reconnecting
+      if (username) {
+        socket.emit('set username', { name: username, avatar: userAvatar, isNewUser: false });
+      }
     });
 
     socket.on('disconnect', () => {
@@ -369,7 +421,7 @@
 
         const textDiv = document.createElement('div');
         textDiv.className = 'text';
-        textDiv.textContent = data.text; // textContent only — XSS safe
+        textDiv.textContent = data.text; 
         bubble.appendChild(textDiv);
 
         const timeDiv = document.createElement('div');
@@ -383,8 +435,15 @@
 
           const avatar = document.createElement('div');
           avatar.className = 'avatar-small';
-          avatar.style.background = colorForName(data.user);
-          avatar.textContent = data.user.charAt(0).toUpperCase();
+          
+          if (data.avatar) {
+            avatar.style.background = `url(${data.avatar}) center/cover`;
+            avatar.textContent = '';
+          } else {
+            avatar.style.background = colorForName(data.user);
+            avatar.textContent = data.user.charAt(0).toUpperCase();
+            avatar.style.color = '#0b141a'; // Contrast text
+          }
 
           row.appendChild(avatar);
           row.appendChild(bubble);
