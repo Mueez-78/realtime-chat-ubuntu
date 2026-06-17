@@ -14,7 +14,7 @@ const MAX_USERNAME_LENGTH = 24;
 const RATE_LIMIT_WINDOW_MS = 3000;
 const RATE_LIMIT_MAX_MESSAGES = 5;
 
-// In-memory state
+// Memori Pelayan
 const chatHistory = [];
 const connectedUsers = new Map(); // socket.id -> { username, avatar, messageTimestamps: [] }
 
@@ -42,6 +42,7 @@ function addSystemMessage(text) {
   io.emit('chat message', messageData);
 }
 
+// Sistem Anti-Spam
 function isRateLimited(user) {
   const now = Date.now();
   user.messageTimestamps = user.messageTimestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
@@ -53,33 +54,45 @@ function isRateLimited(user) {
 io.on('connection', (socket) => {
   console.log(`🟢 Socket connected: ${socket.id}`);
 
-  // Send existing history right away
+  // Hantar sejarah chat kepada pengguna yang baru masuk
   socket.emit('load history', chatHistory);
 
+  // LOGIK MENDAFTAR PENGGUNA (STRICT VALIDATION)
   socket.on('set username', (data) => {
-    // Support both string format (old) or object format with avatar & flags (new)
-    const rawUsername = typeof data === 'string' ? data : data.name;
-    const username = String(rawUsername || '').trim().slice(0, MAX_USERNAME_LENGTH);
-    if (!username) return; 
+    if (!data) return;
 
-    // Accept avatar if provided (limit string size to ~150KB to protect server)
+    // Pastikan format nama adalah teks (string) yang sah, elakkan [object Object]
+    const rawUsername = typeof data === 'string' ? data : data.name;
+    if (typeof rawUsername !== 'string') return; 
+
+    // Bersihkan nama
+    const username = rawUsername.trim().slice(0, MAX_USERNAME_LENGTH);
+    
+    // TEMBOK KESELAMATAN: Jika nama kosong atau meragukan, HALANG!
+    if (!username || username === '[object Object]' || username === 'null') return; 
+
+    // Proses gambar profil jika ada
     let avatar = null;
-    if (data && data.avatar && typeof data.avatar === 'string' && data.avatar.length < 150000) {
+    if (data.avatar && typeof data.avatar === 'string' && data.avatar.length < 150000) {
       avatar = data.avatar;
     }
 
+    // Daftarkan pengguna ke dalam sistem
     connectedUsers.set(socket.id, { username, avatar, messageTimestamps: [] });
     broadcastUserList();
 
-    // Only broadcast "joined the chat" if it's a genuinely new user (not a reconnect)
-    if (data && data.isNewUser) {
+    // Hanya isytihar "Joined" jika ia pendaftaran baharu (bukan sekadar reconnect)
+    if (data.isNewUser) {
       addSystemMessage(`${username} joined the chat`);
     }
   });
 
+  // LOGIK MENGHANTAR MESEJ
   socket.on('chat message', (data) => {
     const user = connectedUsers.get(socket.id);
-    if (!user) return; 
+    
+    // TEMBOK KESELAMATAN: Jika pengguna belum daftar nama (bypass), HALANG mesej!
+    if (!user || !user.username) return; 
 
     if (isRateLimited(user)) {
       socket.emit('rate limited');
@@ -95,32 +108,32 @@ io.on('connection', (socket) => {
       text, 
       time: timestamp() 
     };
+    
     pushHistory(messageData);
     io.emit('chat message', messageData);
   });
 
   socket.on('typing', () => {
     const user = connectedUsers.get(socket.id);
-    if (user) socket.broadcast.emit('typing', user.username);
+    if (user && user.username) socket.broadcast.emit('typing', user.username);
   });
 
   socket.on('stop typing', () => {
     const user = connectedUsers.get(socket.id);
-    if (user) socket.broadcast.emit('stop typing', user.username);
+    if (user && user.username) socket.broadcast.emit('stop typing', user.username);
   });
 
   socket.on('disconnect', () => {
     const user = connectedUsers.get(socket.id);
-    if (user) {
+    if (user && user.username) {
       connectedUsers.delete(socket.id);
       broadcastUserList();
-      // Removed "left the chat" to prevent spam
     }
     console.log(`🔴 Socket disconnected: ${socket.id}`);
   });
 });
 
-// Listen on all IPs (0.0.0.0) so Cloudflare and local network can access it
+// Dengar pada semua port rangkaian
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Chat server running at http://localhost:${PORT}`);
+  console.log(`🚀 Chat server running at http://0.0.0.0:${PORT}`);
 });

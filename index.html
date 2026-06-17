@@ -52,7 +52,9 @@
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     flex-shrink: 0; color: #fff; overflow: hidden;
+    cursor: pointer; transition: filter 0.2s;
   }
+  .avatar:hover { filter: brightness(0.9); }
   .header-info { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
   .header-title { font-weight: 500; font-size: 1.05em; color: var(--text); }
   .header-status { font-size: 0.8em; color: var(--muted); display: flex; align-items: center; gap: 6px; }
@@ -69,7 +71,7 @@
   #messages {
     list-style-type: none;
     padding: 16px; margin: 0; flex: 1; overflow-y: auto;
-    display: flex; flex-direction: column; gap: 6px;
+    display: flex; flex-direction: column; gap: 8px;
   }
   #messages::-webkit-scrollbar { width: 6px; }
   #messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
@@ -80,19 +82,20 @@
     border-radius: 8px; margin: 8px 0; box-shadow: 0 1px 1px rgba(0,0,0,0.1);
   }
 
-  .message { max-width: 75%; display: flex; flex-direction: column; }
+  .message { max-width: 80%; display: flex; flex-direction: column; }
   .message-other { align-self: flex-start; }
   .message-me { align-self: flex-end; }
 
   .message-row { 
     display: flex; 
-    align-items: flex-end; /* Memastikan avatar sentiasa berada di bawah buih mesej */
+    align-items: flex-end; /* Memastikan profil duduk cantik di bawah */
     gap: 8px; 
   }
+  
   .avatar-small {
     width: 30px; 
     height: 30px;
-    min-width: 30px; /* Wajib ada supaya ia kekal bulat dan tak meregang */
+    min-width: 30px; /* Halang dari jadi lonjong */
     min-height: 30px;
     border-radius: 50%;
     display: flex; 
@@ -100,10 +103,10 @@
     justify-content: center;
     font-size: 0.85em; 
     font-weight: 700; 
-    color: #ffffff;
+    color: #fff;
     flex-shrink: 0; 
     overflow: hidden;
-    margin-bottom: 2px; /* Selaraskan kedudukan dengan dasar mesej */
+    margin-bottom: 2px;
   }
 
   .bubble {
@@ -172,7 +175,7 @@
   .emoji-panel button { background: none; border: none; font-size: 1.3em; cursor: pointer; padding: 4px; border-radius: 4px; }
   .emoji-panel button:hover { background: rgba(255,255,255,0.05); }
 
-  /* Modals & Toasts */
+  /* Modals & Toasts (Ketat - Tak boleh klik luar untuk tutup) */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(11, 20, 26, 0.85);
     display: none; align-items: center; justify-content: center; z-index: 100; padding: 20px;
@@ -210,7 +213,7 @@
     #messages { padding: 12px 12px 8px; gap: 4px; }
     form { padding: 8px 10px; gap: 8px; }
     
-    /* Prevent iOS Auto-Zoom */
+    /* Halang iOS Auto-Zoom */
     input { font-size: 16px; padding: 10px 14px; }
     
     .emoji-panel { grid-template-columns: repeat(7, 1fr); left: 10px; max-width: 260px; }
@@ -221,9 +224,9 @@
 <body>
 
   <div class="header">
-    <div class="avatar">🐧</div>
+    <div class="avatar" id="edit-profile-btn" title="Edit Profile">🐧</div>
     <div class="header-info">
-      <div class="header-title">Ubuntu Live Lounge</div>
+      <div class="header-title">18 Rock Live Lounge</div>
       <div class="header-status">
         <span class="dot connecting" id="status-dot"></span>
         <span id="status-text">Connecting…</span>
@@ -239,9 +242,9 @@
 
   <form id="form">
     <button type="button" id="emoji-btn" class="icon-btn" aria-label="Add emoji">😊</button>
-    <input id="input" autocomplete="off" maxlength="500" placeholder="Type a message…" required />
+    <input id="input" autocomplete="off" maxlength="500" placeholder="Type a message…" disabled required />
     <span id="char-counter"></span>
-    <button type="submit" id="send-btn" class="send-btn" aria-label="Send message">
+    <button type="submit" id="send-btn" class="send-btn" aria-label="Send message" disabled>
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M3 11.5L21 3l-8.5 18-2.5-7.5L3 11.5z" fill="white"/>
       </svg>
@@ -257,7 +260,7 @@
       <input type="file" id="avatar-upload" accept="image/*" style="display: none;" />
       
       <h2>Welcome to the Lounge</h2>
-      <p>Upload a photo and enter a name</p>
+      <p>Upload a photo and enter your name</p>
       <form id="username-form">
         <input id="username-input" maxlength="24" autocomplete="off" placeholder="Your name" required />
         <button type="submit">Start Chatting</button>
@@ -275,19 +278,28 @@
     const messagesEl = document.getElementById('messages');
     const form = document.getElementById('form');
     const input = document.getElementById('input');
+    const sendBtn = document.getElementById('send-btn');
     const charCounter = document.getElementById('char-counter');
     const statusDot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
     const typingIndicator = document.getElementById('typing-indicator');
     const scrollBtn = document.getElementById('scroll-bottom-btn');
+    
+    // Modal & Profile
     const usernameModal = document.getElementById('username-modal');
     const usernameInput = document.getElementById('username-input');
     const usernameForm = document.getElementById('username-form');
+    const editProfileBtn = document.getElementById('edit-profile-btn');
+    const avatarUpload = document.getElementById('avatar-upload');
+    const avatarPreview = document.getElementById('avatar-preview');
+    
     const toast = document.getElementById('toast');
     const emojiBtn = document.getElementById('emoji-btn');
     const emojiPanel = document.getElementById('emoji-panel');
 
     const MAX_LEN = 500;
+    
+    // Tarik memori lama jika wujud
     let username = localStorage.getItem('chat_username') || '';
     let userAvatar = localStorage.getItem('chat_avatar') || null;
     let lastKnownUserCount = 0;
@@ -303,10 +315,7 @@
       return palette[hash % palette.length];
     }
 
-    // Avatar preview logic
-    const avatarUpload = document.getElementById('avatar-upload');
-    const avatarPreview = document.getElementById('avatar-preview');
-
+    // Fungsi Pratonton Gambar
     if (userAvatar) {
       avatarPreview.innerHTML = `<img src="${userAvatar}" style="width: 100%; height: 100%; object-fit: cover;" />`;
       avatarPreview.style.border = "none";
@@ -315,7 +324,7 @@
     avatarUpload.addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (file) {
-        if (file.size > 100000) {
+        if (file.size > 100000) { // Max 100KB untuk elak pelayan perlahan
           alert("Image is too large! Please select an image under 100KB.");
           return;
         }
@@ -329,8 +338,28 @@
       }
     });
 
+    // Fungsi Kemaskini Gambar Profil di Header
+    function updateHeaderAvatar() {
+      if (userAvatar) {
+        editProfileBtn.innerHTML = `<img src="${userAvatar}" style="width: 100%; height: 100%; object-fit: cover;" />`;
+        editProfileBtn.style.background = "none";
+      } else if (username) {
+        editProfileBtn.textContent = username.charAt(0).toUpperCase();
+        editProfileBtn.style.background = colorForName(username);
+        editProfileBtn.style.color = '#fff';
+      }
+    }
+
+    // Klik Header untuk Buka Semula Modal
+    editProfileBtn.addEventListener('click', () => {
+      usernameInput.value = username; // Letak nama sedia ada
+      showUsernameModal();
+    });
+
     function showUsernameModal() {
       usernameModal.classList.add('visible');
+      input.disabled = true; // Kunci input chat selagi tak daftar
+      sendBtn.disabled = true;
       usernameInput.focus();
     }
 
@@ -340,27 +369,39 @@
       if (userAvatar) localStorage.setItem('chat_avatar', userAvatar);
       
       usernameModal.classList.remove('visible');
-      // Pass isNewUser: true when explicitly joining via the form
-      socket.emit('set username', { name: username, avatar: userAvatar, isNewUser: true });
+      
+      // Buka kunci input chat
+      input.disabled = false;
+      sendBtn.disabled = false;
       input.focus();
+      
+      updateHeaderAvatar();
+      socket.emit('set username', { name: username, avatar: userAvatar, isNewUser: true });
     }
 
-    if (!username) showUsernameModal();
+    // Jika masuk web tanpa memori, wajibkan isi borang
+    if (!username) {
+      showUsernameModal();
+    } else {
+      input.disabled = false;
+      sendBtn.disabled = false;
+      updateHeaderAvatar();
+    }
 
     usernameForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const name = usernameInput.value.trim().slice(0, 24);
-      if (name) joinChat(name);
+      if (name) joinChat(name); // Wajibkan nama
     });
 
-    // ---- Connection status ----
+    // ---- Status Rangkaian ----
     socket.on('connect', () => {
       statusDot.className = 'dot online';
       statusText.textContent = lastKnownUserCount
         ? `${lastKnownUserCount} ${lastKnownUserCount === 1 ? 'person' : 'people'} online`
         : 'Online';
       
-      // Pass isNewUser: false when automatically reconnecting
+      // Reconnect secara senyap jika ada memori
       if (username) {
         socket.emit('set username', { name: username, avatar: userAvatar, isNewUser: false });
       }
@@ -371,7 +412,6 @@
       statusText.textContent = 'Reconnecting…';
     });
 
-    // ---- Online user count ----
     socket.on('user list', (users) => {
       lastKnownUserCount = users.length;
       if (statusDot.classList.contains('online')) {
@@ -379,7 +419,7 @@
       }
     });
 
-    // ---- Scroll handling ----
+    // ---- Kawalan Menatal (Scroll) ----
     function isScrolledNearBottom() {
       return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
     }
@@ -398,7 +438,7 @@
       scrollBtn.classList.remove('visible');
     });
 
-    // ---- Rendering ----
+    // ---- Paparkan Mesej ----
     function appendMessage(data) {
       const li = document.createElement('li');
 
@@ -442,7 +482,7 @@
           } else {
             avatar.style.background = colorForName(data.user);
             avatar.textContent = data.user.charAt(0).toUpperCase();
-            avatar.style.color = '#0b141a'; // Contrast text
+            avatar.style.color = '#0b141a';
           }
 
           row.appendChild(avatar);
@@ -470,7 +510,7 @@
 
     socket.on('chat message', appendMessage);
 
-    // ---- Typing indicator ----
+    // ---- Tanda Sedang Menaip (Typing Indicator) ----
     function renderTypingIndicator() {
       if (typingUsers.size === 0) {
         typingIndicator.textContent = '';
@@ -503,7 +543,7 @@
       typingTimeout = setTimeout(() => socket.emit('stop typing'), 1200);
     });
 
-    // ---- Emoji picker ----
+    // ---- Panel Emoji ----
     const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😜','🤔','😎','🥳','😴','😢','😭','😡','🤯','😇','🙄','👍','👎','👏','🙏','🔥','💯','❤️','💔','✨','🎉','🥰','😏','🤝','👀'];
     emojiPanel.innerHTML = EMOJIS.map((e) => `<button type="button">${e}</button>`).join('');
 
@@ -535,11 +575,14 @@
       field.setSelectionRange(pos, pos);
     }
 
-    // ---- Sending ----
+    // ---- Hantar Mesej ----
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const text = input.value.trim();
-      if (!text) return;
+      
+      // Jika pengguna cuba hantar tanpa nama yang sah (bypass bug), halang!
+      if (!username || !text) return; 
+
       socket.emit('chat message', { text });
       input.value = '';
       charCounter.classList.remove('visible');
@@ -548,7 +591,7 @@
       isNearBottom = true;
     });
 
-    // ---- Rate limit feedback ----
+    // ---- Amaran Spam (Rate Limiting) ----
     socket.on('rate limited', () => {
       toast.textContent = "You're sending messages a bit fast — give it a second.";
       toast.classList.add('visible');
