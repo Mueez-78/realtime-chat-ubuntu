@@ -14,9 +14,9 @@ const MAX_USERNAME_LENGTH = 24;
 const RATE_LIMIT_WINDOW_MS = 3000;
 const RATE_LIMIT_MAX_MESSAGES = 5;
 
-// Memori Pelayan
+// In-memory state
 const chatHistory = [];
-const connectedUsers = new Map(); // socket.id -> { username, avatar, messageTimestamps: [] }
+const connectedUsers = new Map();
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
@@ -36,13 +36,8 @@ function pushHistory(messageData) {
   if (chatHistory.length > MAX_HISTORY) chatHistory.shift();
 }
 
-function addSystemMessage(text) {
-  const messageData = { system: true, text, time: timestamp() };
-  pushHistory(messageData);
-  io.emit('chat message', messageData);
-}
+// System message function removed completely as requested
 
-// Sistem Anti-Spam
 function isRateLimited(user) {
   const now = Date.now();
   user.messageTimestamps = user.messageTimestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
@@ -54,44 +49,33 @@ function isRateLimited(user) {
 io.on('connection', (socket) => {
   console.log(`🟢 Socket connected: ${socket.id}`);
 
-  // Hantar sejarah chat kepada pengguna yang baru masuk
   socket.emit('load history', chatHistory);
 
-  // LOGIK MENDAFTAR PENGGUNA (STRICT VALIDATION)
   socket.on('set username', (data) => {
     if (!data) return;
 
-    // Pastikan format nama adalah teks (string) yang sah, elakkan [object Object]
+    // FIX: Properly handle both old string format and new object format
     const rawUsername = typeof data === 'string' ? data : data.name;
     if (typeof rawUsername !== 'string') return; 
 
-    // Bersihkan nama
     const username = rawUsername.trim().slice(0, MAX_USERNAME_LENGTH);
     
-    // TEMBOK KESELAMATAN: Jika nama kosong atau meragukan, HALANG!
+    // Safety check against the [object Object] bug
     if (!username || username === '[object Object]' || username === 'null') return; 
 
-    // Proses gambar profil jika ada
     let avatar = null;
     if (data.avatar && typeof data.avatar === 'string' && data.avatar.length < 150000) {
       avatar = data.avatar;
     }
 
-    // Daftarkan pengguna ke dalam sistem
     connectedUsers.set(socket.id, { username, avatar, messageTimestamps: [] });
     broadcastUserList();
 
-    // Hanya isytihar "Joined" jika ia pendaftaran baharu (bukan sekadar reconnect)
-    if (data.isNewUser) {
-      addSystemMessage(`${username} joined the chat`);
-    }
+    // "Joined the chat" broadcast has been entirely removed here.
   });
 
-  // LOGIK MENGHANTAR MESEJ
   socket.on('chat message', (data) => {
     const user = connectedUsers.get(socket.id);
-    
-    // TEMBOK KESELAMATAN: Jika pengguna belum daftar nama (bypass), HALANG mesej!
     if (!user || !user.username) return; 
 
     if (isRateLimited(user)) {
@@ -133,7 +117,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Dengar pada semua port rangkaian
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Chat server running at http://0.0.0.0:${PORT}`);
 });
