@@ -185,26 +185,36 @@
   .emoji-panel button { background: none; border: none; font-size: 1.3em; cursor: pointer; padding: 4px; border-radius: 4px; }
   .emoji-panel button:hover { background: rgba(255,255,255,0.05); }
 
-  /* Modals & Toasts */
+ /* Modals & Toasts */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(11, 20, 26, 0.85);
     display: none; align-items: center; justify-content: center; z-index: 100; padding: 20px;
   }
   .modal-overlay.visible { display: flex; }
+
   .modal-card {
-    background: var(--surface); padding: 24px; border-radius: 8px; width: 100%;
+    background: var(--surface); padding: 24px; border-radius: 12px; width: 100%;
     max-width: 320px; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    position: relative; /* Penting untuk kedudukan butang pangkah */
   }
-  .modal-card h2 { margin: 10px 0 6px; font-size: 1.2em; font-weight: 500; }
-  .modal-card p { margin: 0 0 20px; color: var(--muted); font-size: 0.9em; }
-  .modal-card input {
-    width: 100%; padding: 12px; border: none; border-radius: 6px;
-    background: var(--input-bg); color: white; margin-bottom: 16px; font-size: 1em;
+
+  /* Butang Pangkah (Close) */
+  .close-btn {
+    position: absolute; top: 10px; right: 15px;
+    background: none; border: none; color: var(--muted);
+    font-size: 1.8em; cursor: pointer; transition: color 0.2s;
   }
-  .modal-card button {
-    width: 100%; padding: 12px; border: none; border-radius: 6px;
-    background: var(--accent); color: white; font-weight: 500; font-size: 1em; cursor: pointer;
+  .close-btn:hover { color: var(--text); }
+
+  #username-form {
+    display: flex; flex-direction: column; gap: 12px; margin-top: 20px;
   }
+  #username-form input, #username-form button {
+    width: 100%; padding: 12px; border-radius: 6px; border: none; font-size: 1em;
+  }
+  #username-form input { background: var(--input-bg); color: white; }
+  #username-form button { background: var(--accent); color: white; font-weight: 600; cursor: pointer; }
+  #username-form button:hover { background: var(--accent-hover); }
 
   #toast {
     position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
@@ -262,20 +272,25 @@
   </form>
 
   <div class="modal-overlay" id="username-modal">
-    <div class="modal-card">
-      <label for="avatar-upload" id="avatar-preview" style="cursor: pointer; margin: 0 auto 16px; display: block; width: 64px; height: 64px; border-radius: 50%; background: var(--input-bg); border: 2px dashed var(--muted); display: flex; align-items: center; justify-content: center; overflow: hidden; transition: all 0.2s;">
-        <span style="font-size: 24px;">📷</span>
-      </label>
-      <input type="file" id="avatar-upload" accept="image/*" style="display: none;" />
-      
-      <h2>Welcome to the Lounge</h2>
-      <p>Upload a photo and enter your name</p>
-      <form id="username-form">
-        <input id="username-input" maxlength="24" autocomplete="off" placeholder="Your name" required />
-        <button type="submit">Start Chatting</button>
-      </form>
-    </div>
+  <div class="modal-card">
+    <!-- Butang Pangkah (Close) -->
+    <button id="close-modal-btn" class="close-btn" aria-label="Close">&times;</button>
+    
+    <label for="avatar-upload" id="avatar-preview" ...>
+      <span>📷</span>
+    </label>
+    <input type="file" id="avatar-upload" accept="image/*" style="display: none;" />
+    
+    <h2>Welcome to the Lounge</h2>
+    <p>Upload a photo and enter your name</p>
+    
+    <!-- Borang disusun secara menegak untuk keseimbangan -->
+    <form id="username-form">
+      <input id="username-input" maxlength="24" placeholder="Your name" required />
+      <button type="submit">Start Chatting</button>
+    </form>
   </div>
+</div>
 
   <div id="toast"></div>
 
@@ -305,6 +320,7 @@
     const toast = document.getElementById('toast');
     const emojiBtn = document.getElementById('emoji-btn');
     const emojiPanel = document.getElementById('emoji-panel');
+    const closeModalBtn = document.getElementById('close-modal-btn');
 
     const MAX_LEN = 500;
     
@@ -408,6 +424,14 @@
       e.preventDefault();
       const name = usernameInput.value.trim().slice(0, 24);
       if (name) joinChat(name);
+    });
+
+    closeModalBtn.addEventListener('click', () => {
+      if (username) {
+        usernameModal.classList.remove('visible');
+      } else {
+        alert("Please enter a name to start chatting.");
+      }
     });
 
     // ---- Status Rangkaian ----
