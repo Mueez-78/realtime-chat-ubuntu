@@ -34,8 +34,7 @@ db.run(`
   )
 `);
 
-// Connected users state (temporary, no need for DB)
-const connectedUsers = new Map(); // socket.id -> { username, avatar, messageTimestamps: [] }
+const connectedUsers = new Map(); 
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
@@ -62,7 +61,7 @@ function isRateLimited(user) {
 io.on('connection', (socket) => {
   console.log(`🟢 Socket connected: ${socket.id}`);
 
-  // FETCH CHAT HISTORY FROM DATABASE (Last 50 messages)
+  // FETCH CHAT HISTORY FROM DATABASE
   db.all(
     `SELECT user, avatar, text, time FROM messages ORDER BY id DESC LIMIT ?`,
     [MAX_HISTORY],
@@ -71,7 +70,6 @@ io.on('connection', (socket) => {
         console.error('Database read error:', err);
         return;
       }
-      // Reverse so oldest is at the top, newest at the bottom
       const history = rows.reverse();
       socket.emit('load history', history);
     }
@@ -80,7 +78,6 @@ io.on('connection', (socket) => {
   socket.on('set username', (data) => {
     if (!data) return;
 
-    // Strict validation to prevent the [object Object] bug
     const rawUsername = typeof data === 'string' ? data : data.name;
     if (typeof rawUsername !== 'string') return; 
 
@@ -94,7 +91,6 @@ io.on('connection', (socket) => {
 
     connectedUsers.set(socket.id, { username, avatar, messageTimestamps: [] });
     broadcastUserList();
-    // System messages ("joined the chat") are removed to keep the chat clean
   });
 
   socket.on('chat message', (data) => {
@@ -125,8 +121,8 @@ io.on('connection', (socket) => {
       }
     );
 
-
     db.run(`DELETE FROM messages WHERE id NOT IN (SELECT id FROM messages ORDER BY id DESC LIMIT 100)`);
+
     io.emit('chat message', messageData);
   });
 
