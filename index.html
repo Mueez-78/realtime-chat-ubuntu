@@ -1,118 +1,489 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Late Night Chat</title>
-  <style>
-    /* Modern Dark Theme Styling */
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background: #0b141a; color: #e9edef; display: flex; flex-direction: column; height: 100vh; }
-    
-    /* Modern Header */
-    .header { background: #202c33; padding: 12px 20px; display: flex; align-items: center; gap: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.5); z-index: 10; }
-    .avatar { width: 45px; height: 45px; background: #00a884; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5em; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-    .header-info { display: flex; flex-direction: column; justify-content: center; }
-    .header-title { font-weight: bold; font-size: 1.1em; color: #e9edef; margin-bottom: 2px; }
-    .header-status { font-size: 0.85em; color: #00a884; display: flex; align-items: center; gap: 5px; }
-    
-    /* Glowing Online Dot */
-    .dot { width: 8px; height: 8px; background-color: #00a884; border-radius: 50%; animation: pulse 2s infinite; }
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-    
-    /* Chat Container */
-    #messages { list-style-type: none; padding: 20px; margin: 0; flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-    
-    /* Chat Bubbles */
-    .message { max-width: 75%; padding: 8px 12px 20px 12px; border-radius: 12px; position: relative; word-wrap: break-word; display: inline-block; box-shadow: 0 1px 2px rgba(0,0,0,0.3); min-width: 80px; }
-    .message-other { background: #202c33; align-self: flex-start; border-top-left-radius: 0; }
-    .message-me { background: #005c4b; align-self: flex-end; border-top-right-radius: 0; }
-    
-    /* Sender Name & Timestamp */
-    .sender { font-size: 0.8em; font-weight: bold; margin-bottom: 3px; color: #53bdeb; }
-    .message-me .sender { display: none; }
-    .timestamp { font-size: 0.65em; color: rgba(255,255,255,0.6); position: absolute; bottom: 5px; right: 10px; }
-    
-    /* Input Form */
-    form { display: flex; padding: 10px; background: #202c33; align-items: center; }
-    input { flex-grow: 1; padding: 15px; border: none; border-radius: 20px; background: #2a3942; color: white; margin-right: 10px; outline: none; font-size: 1em; }
-    button { padding: 15px 25px; border: none; background: #00a884; color: white; border-radius: 20px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 1em; }
-    button:hover { background: #008f6f; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0b141a" />
+<title>Late Night Chat</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: #0b141a;
+    color: #e9edef;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  /* Header */
+  .header {
+    background: #202c33;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    z-index: 10;
+    flex-shrink: 0;
+  }
+  .avatar {
+    width: 44px; height: 44px;
+    background: #00a884;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4em;
+    flex-shrink: 0;
+  }
+  .header-info { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+  .header-title { font-weight: 600; font-size: 1.05em; color: #e9edef; }
+  .header-status { font-size: 0.82em; color: #8696a0; display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+
+  .dot { width: 8px; height: 8px; border-radius: 50%; transition: background-color .3s ease; flex-shrink: 0; }
+  .dot.connecting { background: #ffb74d; animation: pulse 1.1s infinite; }
+  .dot.online { background: #00a884; animation: pulse 2.2s infinite; }
+  .dot.offline { background: #f15c5c; animation: none; }
+  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
+  /* Chat area */
+  .chat-area { position: relative; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  #messages {
+    list-style-type: none;
+    padding: 16px 16px 8px;
+    margin: 0;
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  #messages::-webkit-scrollbar { width: 6px; }
+  #messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+
+  @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .system-message {
+    align-self: center;
+    font-size: 0.75em;
+    color: #8696a0;
+    background: rgba(255,255,255,0.06);
+    padding: 4px 14px;
+    border-radius: 12px;
+    margin: 2px 0;
+    animation: fadeSlideIn .25s ease;
+  }
+
+  .message { max-width: 78%; display: flex; flex-direction: column; animation: fadeSlideIn .25s ease; }
+  .message-other { align-self: flex-start; }
+  .message-me { align-self: flex-end; }
+
+  .message-row { display: flex; align-items: flex-end; gap: 8px; }
+  .avatar-small {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85em; font-weight: 700; color: #0b141a;
+    flex-shrink: 0;
+  }
+
+  .bubble {
+    padding: 8px 12px 18px 12px;
+    border-radius: 12px;
+    position: relative;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    word-wrap: break-word;
+    min-width: 64px;
+  }
+  .message-other .bubble { background: #202c33; border-top-left-radius: 0; }
+  .message-me .bubble { background: #005c4b; border-top-right-radius: 0; }
+
+  .sender { font-size: 0.78em; font-weight: 600; margin-bottom: 3px; color: #53bdeb; }
+  .text { font-size: 0.96em; line-height: 1.35; white-space: pre-wrap; }
+  .timestamp { font-size: 0.65em; color: rgba(255,255,255,0.55); position: absolute; bottom: 5px; right: 10px; }
+
+  /* Typing indicator */
+  #typing-indicator {
+    height: 0;
+    overflow: hidden;
+    font-size: 0.8em;
+    color: #8696a0;
+    padding: 0 20px;
+    transition: height .2s ease;
+    flex-shrink: 0;
+  }
+  #typing-indicator.visible { height: 22px; padding-top: 2px; }
+
+  /* Scroll-to-bottom button */
+  .scroll-bottom-btn {
+    position: absolute;
+    bottom: 14px;
+    right: 18px;
+    background: #202c33;
+    color: #e9edef;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    cursor: pointer;
+    font-size: 0.82em;
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+    transition: opacity .2s ease, transform .2s ease;
+    z-index: 5;
+  }
+  .scroll-bottom-btn.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+  /* Input form */
+  form {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    background: #202c33;
+    flex-shrink: 0;
+    gap: 8px;
+  }
+  input {
+    flex-grow: 1;
+    padding: 14px 16px;
+    border: none;
+    border-radius: 22px;
+    background: #2a3942;
+    color: white;
+    outline: none;
+    font-size: 1em;
+  }
+  #char-counter { font-size: 0.75em; color: #f15c5c; opacity: 0; transition: opacity .2s ease; flex-shrink: 0; }
+  #char-counter.visible { opacity: 1; }
+
+  button[type="submit"] {
+    padding: 14px 22px;
+    border: none;
+    background: #00a884;
+    color: white;
+    border-radius: 22px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.95em;
+    transition: background .2s ease;
+    flex-shrink: 0;
+  }
+  button[type="submit"]:hover { background: #008f6f; }
+
+  /* Username modal */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal-overlay.visible { display: flex; }
+  .modal-card {
+    background: #202c33;
+    padding: 30px 24px;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 340px;
+    text-align: center;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+  }
+  .modal-card h2 { margin: 14px 0 6px; font-size: 1.25em; }
+  .modal-card p { margin: 0 0 20px; color: #8696a0; font-size: 0.88em; }
+  .modal-card input {
+    width: 100%; padding: 13px 16px; border: none; border-radius: 10px;
+    background: #2a3942; color: white; margin-bottom: 14px; font-size: 1em; outline: none;
+  }
+  .modal-card button {
+    width: 100%; padding: 13px; border: none; border-radius: 10px;
+    background: #00a884; color: white; font-weight: 600; font-size: 1em; cursor: pointer;
+    transition: background .2s ease;
+  }
+  .modal-card button:hover { background: #008f6f; }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 86px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #202c33;
+    color: #e9edef;
+    padding: 10px 18px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease;
+    z-index: 50;
+    max-width: 85%;
+    text-align: center;
+  }
+  #toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
 </head>
 <body>
+
   <div class="header">
     <div class="avatar">🐧</div>
     <div class="header-info">
       <div class="header-title">Ubuntu Live Lounge</div>
       <div class="header-status">
-        <span class="dot"></span> Online
+        <span class="dot connecting" id="status-dot"></span>
+        <span id="status-text">Connecting…</span>
       </div>
     </div>
   </div>
-  
-  <ul id="messages"></ul>
-  
-  <form id="form" action="">
-    <input id="input" autocomplete="off" placeholder="Type a message..." required />
-    <button>Send</button>
+
+  <div class="chat-area">
+    <ul id="messages"></ul>
+    <button class="scroll-bottom-btn" id="scroll-bottom-btn" type="button">↓ New messages</button>
+    <div id="typing-indicator"></div>
+  </div>
+
+  <form id="form">
+    <input id="input" autocomplete="off" maxlength="500" placeholder="Type a message…" required />
+    <span id="char-counter"></span>
+    <button type="submit">Send</button>
   </form>
+
+  <div class="modal-overlay" id="username-modal">
+    <div class="modal-card">
+      <div class="avatar" style="margin: 0 auto;">🐧</div>
+      <h2>Welcome to the Lounge</h2>
+      <p>Enter a name to start chatting</p>
+      <form id="username-form">
+        <input id="username-input" maxlength="24" autocomplete="off" placeholder="Your name" required />
+        <button type="submit">Start Chatting</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    var socket = io();
-    var messages = document.getElementById('messages');
-    var form = document.getElementById('form');
-    var input = document.getElementById('input');
-    
-    var username = prompt("Welcome! Please enter your name:") || "Anonymous";
+  (function () {
+    const socket = io();
 
-    // Function to create and append a message safely (XSS Protected)
-    function appendMessage(data) {
-      var li = document.createElement('li');
-      li.className = (data.user === username) ? 'message message-me' : 'message message-other';
-      
-      // Prevent XSS by using textContent instead of innerHTML
-      if (data.user !== username) {
-        var senderDiv = document.createElement('div');
-        senderDiv.className = 'sender';
-        senderDiv.textContent = data.user;
-        li.appendChild(senderDiv);
-      }
-      
-      var textDiv = document.createElement('div');
-      textDiv.textContent = data.text;
-      li.appendChild(textDiv);
-      
-      var timeDiv = document.createElement('div');
-      timeDiv.className = 'timestamp';
-      timeDiv.textContent = data.time;
-      li.appendChild(timeDiv);
-      
-      messages.appendChild(li);
-      messages.scrollTop = messages.scrollHeight;
+    const messagesEl = document.getElementById('messages');
+    const form = document.getElementById('form');
+    const input = document.getElementById('input');
+    const charCounter = document.getElementById('char-counter');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const typingIndicator = document.getElementById('typing-indicator');
+    const scrollBtn = document.getElementById('scroll-bottom-btn');
+    const usernameModal = document.getElementById('username-modal');
+    const usernameInput = document.getElementById('username-input');
+    const usernameForm = document.getElementById('username-form');
+    const toast = document.getElementById('toast');
+
+    const MAX_LEN = 500;
+    let username = localStorage.getItem('chat_username') || '';
+    let lastKnownUserCount = 0;
+    let typingTimeout = null;
+    const typingUsers = new Set();
+    let isNearBottom = true;
+    let toastTimeout = null;
+
+    const palette = ['#f06292', '#ba68c8', '#7986cb', '#4dd0e1', '#81c784', '#ffb74d', '#a1887f', '#90a4ae'];
+    function colorForName(name) {
+      let hash = 0;
+      for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+      return palette[hash % palette.length];
     }
 
-    // Load initial history
-    socket.on('load history', function(history) {
-      messages.innerHTML = ''; // Clear current messages to prevent duplication
-      history.forEach(function(data) {
-        appendMessage(data);
-      });
+    function showUsernameModal() {
+      usernameModal.classList.add('visible');
+      usernameInput.focus();
+    }
+
+    function joinChat(name) {
+      username = name;
+      localStorage.setItem('chat_username', username);
+      usernameModal.classList.remove('visible');
+      socket.emit('set username', username);
+      input.focus();
+    }
+
+    if (!username) showUsernameModal();
+
+    usernameForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = usernameInput.value.trim().slice(0, 24);
+      if (name) joinChat(name);
     });
 
-    // Send new message
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-      if (input.value) {
-        var msgData = { user: username, text: input.value };
-        socket.emit('chat message', msgData);
-        input.value = '';
+    // ---- Connection status ----
+    socket.on('connect', () => {
+      statusDot.className = 'dot online';
+      statusText.textContent = lastKnownUserCount
+        ? `${lastKnownUserCount} ${lastKnownUserCount === 1 ? 'person' : 'people'} online`
+        : 'Online';
+      if (username) socket.emit('set username', username);
+    });
+
+    socket.on('disconnect', () => {
+      statusDot.className = 'dot offline';
+      statusText.textContent = 'Reconnecting…';
+    });
+
+    // ---- Online user count ----
+    socket.on('user list', (users) => {
+      lastKnownUserCount = users.length;
+      if (statusDot.classList.contains('online')) {
+        statusText.textContent = `${users.length} ${users.length === 1 ? 'person' : 'people'} online`;
       }
     });
 
-    // Receive new message
-    socket.on('chat message', function(data) {
-      appendMessage(data);
+    // ---- Scroll handling ----
+    function isScrolledNearBottom() {
+      return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
+    }
+
+    messagesEl.addEventListener('scroll', () => {
+      isNearBottom = isScrolledNearBottom();
+      if (isNearBottom) scrollBtn.classList.remove('visible');
     });
+
+    function scrollToBottom(smooth) {
+      messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+    }
+
+    scrollBtn.addEventListener('click', () => {
+      scrollToBottom(true);
+      scrollBtn.classList.remove('visible');
+    });
+
+    // ---- Rendering ----
+    function appendMessage(data) {
+      const li = document.createElement('li');
+
+      if (data.system) {
+        li.className = 'system-message';
+        li.textContent = data.text;
+      } else {
+        const isMe = data.user === username;
+        li.className = 'message ' + (isMe ? 'message-me' : 'message-other');
+
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+
+        if (!isMe) {
+          const senderDiv = document.createElement('div');
+          senderDiv.className = 'sender';
+          senderDiv.textContent = data.user;
+          bubble.appendChild(senderDiv);
+        }
+
+        const textDiv = document.createElement('div');
+        textDiv.className = 'text';
+        textDiv.textContent = data.text; // textContent only — XSS safe
+        bubble.appendChild(textDiv);
+
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'timestamp';
+        timeDiv.textContent = data.time;
+        bubble.appendChild(timeDiv);
+
+        if (!isMe) {
+          const row = document.createElement('div');
+          row.className = 'message-row';
+
+          const avatar = document.createElement('div');
+          avatar.className = 'avatar-small';
+          avatar.style.background = colorForName(data.user);
+          avatar.textContent = data.user.charAt(0).toUpperCase();
+
+          row.appendChild(avatar);
+          row.appendChild(bubble);
+          li.appendChild(row);
+        } else {
+          li.appendChild(bubble);
+        }
+      }
+
+      messagesEl.appendChild(li);
+
+      if (isNearBottom) {
+        scrollToBottom(false);
+      } else {
+        scrollBtn.classList.add('visible');
+      }
+    }
+
+    socket.on('load history', (history) => {
+      messagesEl.innerHTML = '';
+      history.forEach(appendMessage);
+      scrollToBottom(false);
+    });
+
+    socket.on('chat message', appendMessage);
+
+    // ---- Typing indicator ----
+    function renderTypingIndicator() {
+      if (typingUsers.size === 0) {
+        typingIndicator.textContent = '';
+        typingIndicator.classList.remove('visible');
+        return;
+      }
+      const names = Array.from(typingUsers);
+      let text;
+      if (names.length === 1) text = `${names[0]} is typing…`;
+      else if (names.length === 2) text = `${names[0]} and ${names[1]} are typing…`;
+      else text = 'Several people are typing…';
+      typingIndicator.textContent = text;
+      typingIndicator.classList.add('visible');
+    }
+
+    socket.on('typing', (name) => { typingUsers.add(name); renderTypingIndicator(); });
+    socket.on('stop typing', (name) => { typingUsers.delete(name); renderTypingIndicator(); });
+
+    input.addEventListener('input', () => {
+      const remaining = MAX_LEN - input.value.length;
+      if (remaining < 50) {
+        charCounter.textContent = remaining;
+        charCounter.classList.add('visible');
+      } else {
+        charCounter.classList.remove('visible');
+      }
+
+      socket.emit('typing');
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => socket.emit('stop typing'), 1200);
+    });
+
+    // ---- Sending ----
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      socket.emit('chat message', { text });
+      input.value = '';
+      charCounter.classList.remove('visible');
+      clearTimeout(typingTimeout);
+      socket.emit('stop typing');
+      isNearBottom = true;
+    });
+
+    // ---- Rate limit feedback ----
+    socket.on('rate limited', () => {
+      toast.textContent = "You're sending messages a bit fast — give it a second.";
+      toast.classList.add('visible');
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => toast.classList.remove('visible'), 2500);
+    });
+  })();
   </script>
 </body>
 </html>
