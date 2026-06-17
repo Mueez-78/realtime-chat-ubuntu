@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const { Server } = require('socket.io');
+const sqlite3 = require('sqlite3').verbose(); // <-- Modul Database Baharu
 
 const app = express();
 const server = http.createServer(app);
@@ -14,8 +15,26 @@ const MAX_USERNAME_LENGTH = 24;
 const RATE_LIMIT_WINDOW_MS = 3000;
 const RATE_LIMIT_MAX_MESSAGES = 5;
 
-// In-memory state
-const chatHistory = [];
+// ==========================================
+// PANGKALAN DATA (DATABASE) SETUP
+// ==========================================
+const db = new sqlite3.Database('./chat.db', (err) => {
+  if (err) console.error('🔴 Gagal membuka database:', err.message);
+  else console.log('📁 Database SQLite (chat.db) berjaya disambungkan.');
+});
+
+// Bina jadual (table) jika ia belum wujud
+db.run(`
+  CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user TEXT,
+    avatar TEXT,
+    text TEXT,
+    time TEXT
+  )
+`);
+
+// Status Pengguna (Ini tak perlu masuk database sebab hanya sementara)
 const connectedUsers = new Map();
 
 app.get('/', (req, res) => {
@@ -31,13 +50,7 @@ function broadcastUserList() {
   io.emit('user list', usernames);
 }
 
-function pushHistory(messageData) {
-  chatHistory.push(messageData);
-  if (chatHistory.length > MAX_HISTORY) chatHistory.shift();
-}
-
-// System message function removed completely as requested
-
+// Sistem Anti-Spam
 function isRateLimited(user) {
   const now = Date.now();
   user.messageTimestamps = user.messageTimestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
@@ -49,18 +62,28 @@ function isRateLimited(user) {
 io.on('connection', (socket) => {
   console.log(`🟢 Socket connected: ${socket.id}`);
 
-  socket.emit('load history', chatHistory);
+  // TARIK SEJARAH MESEJ DARI DATABASE (50 Mesej Terakhir)
+  db.all(
+    `SELECT user, avatar, text, time FROM messages ORDER BY id DESC LIMIT ?`,
+    [MAX_HISTORY],
+    (err, rows) => {
+      if (err) {
+        console.error('Error membaca database:', err);
+        return;
+      }
+      // Pusingkan susunan supaya mesej lama di atas, baharu di bawah
+      const history = rows.reverse();
+      socket.emit('load history', history);
+    }
+  );
 
   socket.on('set username', (data) => {
     if (!data) return;
 
-    // FIX: Properly handle both old string format and new object format
     const rawUsername = typeof data === 'string' ? data : data.name;
     if (typeof rawUsername !== 'string') return; 
 
     const username = rawUsername.trim().slice(0, MAX_USERNAME_LENGTH);
-    
-    // Safety check against the [object Object] bug
     if (!username || username === '[object Object]' || username === 'null') return; 
 
     let avatar = null;
@@ -70,8 +93,6 @@ io.on('connection', (socket) => {
 
     connectedUsers.set(socket.id, { username, avatar, messageTimestamps: [] });
     broadcastUserList();
-
-    // "Joined the chat" broadcast has been entirely removed here.
   });
 
   socket.on('chat message', (data) => {
@@ -93,7 +114,19 @@ io.on('connection', (socket) => {
       time: timestamp() 
     };
     
-    pushHistory(messageData);
+    // SIMPAN MESEJ BAHARU KE DALAM DATABASE
+    db.run(
+      `INSERT INTO messages (user, avatar, text, time) VALUES (?, ?, ?, ?)`,
+      [messageData.user, messageData.avatar, messageData.text, messageData.time],
+      function(err) {
+        if (err) console.error('Error menyimpan mesej:', err.message);
+      }
+    );
+
+    // PENJAGAAN MEMORI KAD SD: Padam mesej yang terlalu lama supaya Pi Zero tak berat
+    // (Simpan maksimum 100 mesej sahaja dalam pangkalan data pada satu-satu masa)
+    db.run(`DELETE FROM messages WHERE id NOT IN (SELECT id FROM messages ORDER BY id DESC LIMIT 100)`);
+
     io.emit('chat message', messageData);
   });
 
