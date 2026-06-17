@@ -3,16 +3,32 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#0b141a" />
+<meta name="theme-color" content="#0d0b1e" />
 <title>Late Night Chat</title>
 <style>
+  :root {
+    --bg-1: #0d0b1e;
+    --bg-2: #1a1438;
+    --surface: #1c1733;
+    --surface-light: #28213f;
+    --input-bg: #241d3d;
+    --accent-1: #8b5cf6;
+    --accent-2: #ec4899;
+    --text: #f1f0fa;
+    --muted: #9a93c0;
+    --online: #34d399;
+    --connecting: #fbbf24;
+    --offline: #f87171;
+    --sender-color: #67e8f9;
+  }
+
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
 
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    background: #0b141a;
-    color: #e9edef;
+    background: linear-gradient(160deg, var(--bg-1) 0%, var(--bg-2) 60%, #120c2e 100%);
+    color: var(--text);
     display: flex;
     flex-direction: column;
     height: 100vh;
@@ -22,31 +38,32 @@
 
   /* Header */
   .header {
-    background: #202c33;
+    background: rgba(28, 23, 51, 0.85);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
     padding: 12px 20px;
     display: flex;
     align-items: center;
     gap: 14px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.5);
     z-index: 10;
     flex-shrink: 0;
   }
   .avatar {
     width: 44px; height: 44px;
-    background: #00a884;
+    background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 1.4em;
     flex-shrink: 0;
+    box-shadow: 0 0 16px rgba(139, 92, 246, 0.4);
   }
   .header-info { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
-  .header-title { font-weight: 600; font-size: 1.05em; color: #e9edef; }
-  .header-status { font-size: 0.82em; color: #8696a0; display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  .header-title { font-weight: 600; font-size: 1.05em; color: var(--text); }
+  .header-status { font-size: 0.82em; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-top: 2px; }
 
   .dot { width: 8px; height: 8px; border-radius: 50%; transition: background-color .3s ease; flex-shrink: 0; }
-  .dot.connecting { background: #ffb74d; animation: pulse 1.1s infinite; }
-  .dot.online { background: #00a884; animation: pulse 2.2s infinite; }
-  .dot.offline { background: #f15c5c; animation: none; }
+  .dot.connecting { background: var(--connecting); animation: pulse 1.1s infinite; }
+  .dot.online { background: var(--online); animation: pulse 2.2s infinite; }
+  .dot.offline { background: var(--offline); animation: none; }
   @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
 
   /* Chat area */
@@ -70,7 +87,7 @@
   .system-message {
     align-self: center;
     font-size: 0.75em;
-    color: #8696a0;
+    color: var(--muted);
     background: rgba(255,255,255,0.06);
     padding: 4px 14px;
     border-radius: 12px;
@@ -87,31 +104,35 @@
     width: 30px; height: 30px;
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 0.85em; font-weight: 700; color: #0b141a;
+    font-size: 0.85em; font-weight: 700; color: var(--bg-1);
     flex-shrink: 0;
   }
 
   .bubble {
     padding: 8px 12px 18px 12px;
-    border-radius: 12px;
+    border-radius: 14px;
     position: relative;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.35);
     word-wrap: break-word;
     min-width: 64px;
   }
-  .message-other .bubble { background: #202c33; border-top-left-radius: 0; }
-  .message-me .bubble { background: #005c4b; border-top-right-radius: 0; }
+  .message-other .bubble { background: var(--surface-light); border-top-left-radius: 2px; }
+  .message-me .bubble {
+    background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+    border-top-right-radius: 2px;
+    color: white;
+  }
 
-  .sender { font-size: 0.78em; font-weight: 600; margin-bottom: 3px; color: #53bdeb; }
+  .sender { font-size: 0.78em; font-weight: 600; margin-bottom: 3px; color: var(--sender-color); }
   .text { font-size: 0.96em; line-height: 1.35; white-space: pre-wrap; }
-  .timestamp { font-size: 0.65em; color: rgba(255,255,255,0.55); position: absolute; bottom: 5px; right: 10px; }
+  .timestamp { font-size: 0.65em; color: rgba(255,255,255,0.6); position: absolute; bottom: 5px; right: 10px; }
 
   /* Typing indicator */
   #typing-indicator {
     height: 0;
     overflow: hidden;
     font-size: 0.8em;
-    color: #8696a0;
+    color: var(--muted);
     padding: 0 20px;
     transition: height .2s ease;
     flex-shrink: 0;
@@ -123,12 +144,12 @@
     position: absolute;
     bottom: 14px;
     right: 18px;
-    background: #202c33;
-    color: #e9edef;
-    border: none;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,0.08);
     padding: 8px 14px;
     border-radius: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
     cursor: pointer;
     font-size: 0.82em;
     opacity: 0;
@@ -141,39 +162,84 @@
 
   /* Input form */
   form {
+    position: relative;
     display: flex;
     align-items: center;
     padding: 10px;
-    background: #202c33;
+    background: rgba(28, 23, 51, 0.85);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(255,255,255,0.06);
     flex-shrink: 0;
-    gap: 8px;
+    gap: 6px;
   }
+  .icon-btn {
+    background: none;
+    border: none;
+    font-size: 1.4em;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 50%;
+    transition: background .2s ease;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .icon-btn:hover { background: rgba(255,255,255,0.08); }
+
   input {
     flex-grow: 1;
-    padding: 14px 16px;
+    padding: 13px 16px;
     border: none;
     border-radius: 22px;
-    background: #2a3942;
+    background: var(--input-bg);
     color: white;
     outline: none;
     font-size: 1em;
+    min-width: 0;
   }
-  #char-counter { font-size: 0.75em; color: #f15c5c; opacity: 0; transition: opacity .2s ease; flex-shrink: 0; }
+  #char-counter { font-size: 0.75em; color: var(--offline); opacity: 0; transition: opacity .2s ease; flex-shrink: 0; padding: 0 2px; }
   #char-counter.visible { opacity: 1; }
 
-  button[type="submit"] {
-    padding: 14px 22px;
+  .send-btn {
+    width: 46px; height: 46px;
+    border-radius: 50%;
     border: none;
-    background: #00a884;
-    color: white;
-    border-radius: 22px;
+    background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+    display: flex; align-items: center; justify-content: center;
     cursor: pointer;
-    font-weight: 600;
-    font-size: 0.95em;
-    transition: background .2s ease;
     flex-shrink: 0;
+    transition: filter .2s ease;
   }
-  button[type="submit"]:hover { background: #008f6f; }
+  .send-btn:hover { filter: brightness(1.12); }
+  .send-btn svg { transform: translateX(1px); }
+
+  /* Emoji picker */
+  .emoji-panel {
+    position: absolute;
+    left: 10px;
+    bottom: calc(100% + 8px);
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 2px;
+    box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+    max-width: 320px;
+    max-height: 200px;
+    overflow-y: auto;
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+    z-index: 40;
+  }
+  .emoji-panel.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .emoji-panel button {
+    background: none; border: none; font-size: 1.3em; cursor: pointer;
+    padding: 5px; border-radius: 8px; transition: background .15s ease;
+  }
+  .emoji-panel button:hover { background: rgba(255,255,255,0.1); }
 
   /* Username modal */
   .modal-overlay {
@@ -188,26 +254,27 @@
   }
   .modal-overlay.visible { display: flex; }
   .modal-card {
-    background: #202c33;
-    padding: 30px 24px;
-    border-radius: 16px;
+    background: var(--surface);
+    padding: 32px 24px;
+    border-radius: 18px;
     width: 100%;
     max-width: 340px;
     text-align: center;
-    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(139,92,246,0.15);
   }
-  .modal-card h2 { margin: 14px 0 6px; font-size: 1.25em; }
-  .modal-card p { margin: 0 0 20px; color: #8696a0; font-size: 0.88em; }
+  .modal-card h2 { margin: 16px 0 6px; font-size: 1.25em; }
+  .modal-card p { margin: 0 0 20px; color: var(--muted); font-size: 0.88em; }
   .modal-card input {
     width: 100%; padding: 13px 16px; border: none; border-radius: 10px;
-    background: #2a3942; color: white; margin-bottom: 14px; font-size: 1em; outline: none;
+    background: var(--input-bg); color: white; margin-bottom: 14px; font-size: 1em; outline: none;
   }
   .modal-card button {
     width: 100%; padding: 13px; border: none; border-radius: 10px;
-    background: #00a884; color: white; font-weight: 600; font-size: 1em; cursor: pointer;
-    transition: background .2s ease;
+    background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+    color: white; font-weight: 600; font-size: 1em; cursor: pointer;
+    transition: filter .2s ease;
   }
-  .modal-card button:hover { background: #008f6f; }
+  .modal-card button:hover { filter: brightness(1.1); }
 
   /* Toast */
   #toast {
@@ -215,12 +282,12 @@
     bottom: 86px;
     left: 50%;
     transform: translateX(-50%) translateY(20px);
-    background: #202c33;
-    color: #e9edef;
+    background: var(--surface);
+    color: var(--text);
     padding: 10px 18px;
     border-radius: 20px;
     font-size: 0.85em;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
     opacity: 0;
     pointer-events: none;
     transition: opacity .25s ease, transform .25s ease;
@@ -234,7 +301,11 @@
 <body>
 
   <div class="header">
-    <div class="avatar">🐧</div>
+    <div class="avatar">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="#fff"/>
+      </svg>
+    </div>
     <div class="header-info">
       <div class="header-title">Ubuntu Live Lounge</div>
       <div class="header-status">
@@ -251,14 +322,24 @@
   </div>
 
   <form id="form">
+    <button type="button" id="emoji-btn" class="icon-btn" aria-label="Add emoji">😊</button>
     <input id="input" autocomplete="off" maxlength="500" placeholder="Type a message…" required />
     <span id="char-counter"></span>
-    <button type="submit">Send</button>
+    <button type="submit" id="send-btn" class="send-btn" aria-label="Send message">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 11.5L21 3l-8.5 18-2.5-7.5L3 11.5z" fill="white"/>
+      </svg>
+    </button>
+    <div class="emoji-panel" id="emoji-panel"></div>
   </form>
 
   <div class="modal-overlay" id="username-modal">
     <div class="modal-card">
-      <div class="avatar" style="margin: 0 auto;">🐧</div>
+      <div class="avatar" style="margin: 0 auto;">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="#fff"/>
+        </svg>
+      </div>
       <h2>Welcome to the Lounge</h2>
       <p>Enter a name to start chatting</p>
       <form id="username-form">
@@ -287,6 +368,8 @@
     const usernameInput = document.getElementById('username-input');
     const usernameForm = document.getElementById('username-form');
     const toast = document.getElementById('toast');
+    const emojiBtn = document.getElementById('emoji-btn');
+    const emojiPanel = document.getElementById('emoji-panel');
 
     const MAX_LEN = 500;
     let username = localStorage.getItem('chat_username') || '';
@@ -296,7 +379,7 @@
     let isNearBottom = true;
     let toastTimeout = null;
 
-    const palette = ['#f06292', '#ba68c8', '#7986cb', '#4dd0e1', '#81c784', '#ffb74d', '#a1887f', '#90a4ae'];
+    const palette = ['#f472b6', '#a78bfa', '#60a5fa', '#34d399', '#fbbf24', '#fb7185', '#22d3ee', '#c084fc'];
     function colorForName(name) {
       let hash = 0;
       for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
@@ -462,6 +545,38 @@
       clearTimeout(typingTimeout);
       typingTimeout = setTimeout(() => socket.emit('stop typing'), 1200);
     });
+
+    // ---- Emoji picker ----
+    const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😜','🤔','😎','🥳','😴','😢','😭','😡','🤯','😇','🙄','👍','👎','👏','🙏','🔥','💯','❤️','💔','✨','🎉','🥰','😏','🤝','👀'];
+    emojiPanel.innerHTML = EMOJIS.map((e) => `<button type="button">${e}</button>`).join('');
+
+    emojiBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      emojiPanel.classList.toggle('visible');
+    });
+
+    emojiPanel.addEventListener('click', (e) => {
+      if (e.target.tagName === 'BUTTON') {
+        insertAtCursor(input, e.target.textContent);
+        input.dispatchEvent(new Event('input'));
+        input.focus();
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!emojiPanel.contains(e.target) && e.target !== emojiBtn) {
+        emojiPanel.classList.remove('visible');
+      }
+    });
+
+    function insertAtCursor(field, text) {
+      const start = field.selectionStart ?? field.value.length;
+      const end = field.selectionEnd ?? field.value.length;
+      field.value = field.value.slice(0, start) + text + field.value.slice(end);
+      if (field.value.length > MAX_LEN) field.value = field.value.slice(0, MAX_LEN);
+      const pos = Math.min(start + text.length, field.value.length);
+      field.setSelectionRange(pos, pos);
+    }
 
     // ---- Sending ----
     form.addEventListener('submit', (e) => {

@@ -57,11 +57,14 @@ io.on('connection', (socket) => {
   socket.emit('load history', chatHistory);
 
   socket.on('set username', (rawUsername) => {
-    const username = String(rawUsername || '').trim().slice(0, MAX_USERNAME_LENGTH) || 'Anonymous';
+    // Halang kemasukan tanpa nama yang sah (buang fallback 'Anonymous')
+    const username = String(rawUsername || '').trim().slice(0, MAX_USERNAME_LENGTH);
+    if (!username) return; 
+
     connectedUsers.set(socket.id, { username, messageTimestamps: [] });
 
     broadcastUserList();
-    addSystemMessage(`${username} joined the chat`);
+    // Mesej 'joined the chat' dipadamkan supaya tidak spam ketika refresh
   });
 
   socket.on('chat message', (data) => {
@@ -96,7 +99,7 @@ io.on('connection', (socket) => {
     if (user) {
       connectedUsers.delete(socket.id);
       broadcastUserList();
-      addSystemMessage(`${user.username} left the chat`);
+      // Mesej 'left the chat' dipadamkan supaya tidak spam ketika refresh
     }
     console.log(`🔴 Socket disconnected: ${socket.id}`);
   });
