@@ -67,10 +67,12 @@
     margin-left: auto; 
     background: none; 
     border: none; 
-    font-size: 1.5em; 
     cursor: pointer; 
     color: var(--muted); 
-    padding: 4px;
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: color 0.2s;
   }
   .settings-btn:hover { color: var(--text); }
@@ -185,7 +187,7 @@
   .emoji-panel button { background: none; border: none; font-size: 1.3em; cursor: pointer; padding: 4px; border-radius: 4px; }
   .emoji-panel button:hover { background: rgba(255,255,255,0.05); }
 
- /* Modals & Toasts */
+  /* Modals & Toasts */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(11, 20, 26, 0.85);
     display: none; align-items: center; justify-content: center; z-index: 100; padding: 20px;
@@ -193,27 +195,62 @@
   .modal-overlay.visible { display: flex; }
 
   .modal-card {
-    background: var(--surface); padding: 24px; border-radius: 12px; width: 100%;
-    max-width: 320px; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    position: relative; /* Penting untuk kedudukan butang pangkah */
+    background: var(--surface); 
+    padding: 24px; 
+    border-radius: 12px; 
+    width: 100%;
+    max-width: 320px; 
+    text-align: center; 
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    position: relative; /* Required for the close button */
   }
 
-  /* Butang Pangkah (Close) */
+  /* Close Button */
   .close-btn {
-    position: absolute; top: 10px; right: 15px;
-    background: none; border: none; color: var(--muted);
-    font-size: 1.8em; cursor: pointer; transition: color 0.2s;
+    position: absolute; 
+    top: 10px; 
+    right: 15px;
+    background: none; 
+    border: none; 
+    color: var(--muted);
+    font-size: 1.8em; 
+    cursor: pointer; 
+    transition: color 0.2s;
   }
   .close-btn:hover { color: var(--text); }
 
+  /* Avatar Preview (Strict Circle) */
+  #avatar-preview {
+    width: 80px; 
+    height: 80px; 
+    margin: 0 auto 16px; 
+    border-radius: 50%; 
+    background: var(--input-bg); 
+    border: 2px dashed var(--muted); 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    overflow: hidden; 
+    cursor: pointer;
+  }
+  #avatar-preview span { font-size: 24px; }
+
+  /* Vertical Form Layout */
   #username-form {
-    display: flex; flex-direction: column; gap: 12px; margin-top: 20px;
+    display: flex; 
+    flex-direction: column; 
+    gap: 12px; 
+    margin-top: 16px;
   }
   #username-form input, #username-form button {
-    width: 100%; padding: 12px; border-radius: 6px; border: none; font-size: 1em;
+    width: 100%; 
+    padding: 12px; 
+    border-radius: 6px; 
+    border: none; 
+    font-size: 1em;
   }
   #username-form input { background: var(--input-bg); color: white; }
-  #username-form button { background: var(--accent); color: white; font-weight: 600; cursor: pointer; }
+  #username-form button { background: var(--accent); color: white; font-weight: 600; cursor: pointer; transition: background 0.2s; }
   #username-form button:hover { background: var(--accent-hover); }
 
   #toast {
@@ -241,16 +278,18 @@
 <body>
 
   <div class="header">
-    <div class="avatar" title="Group Profile">🐧</div> <!-- Gambar Group Kekal -->
-    <div class="header-info">
+    <div class="avatar" title="Group Profile">🐧</div> <div class="header-info">
       <div class="header-title">Ubuntu Live Lounge</div>
       <div class="header-status">
         <span class="dot connecting" id="status-dot"></span>
         <span id="status-text">Connecting…</span>
       </div>
     </div>
-    <!-- Ikon Tetapan di Penjuru Kanan -->
-    <button id="edit-profile-btn" class="settings-btn" title="Edit Profile">⚙️</button>
+    <button id="edit-profile-btn" class="settings-btn" title="Edit Profile">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+        <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+      </svg>
+    </button>
   </div>
 
   <div class="chat-area">
@@ -272,25 +311,23 @@
   </form>
 
   <div class="modal-overlay" id="username-modal">
-  <div class="modal-card">
-    <!-- Butang Pangkah (Close) -->
-    <button id="close-modal-btn" class="close-btn" aria-label="Close">&times;</button>
-    
-    <label for="avatar-upload" id="avatar-preview" ...>
-      <span>📷</span>
-    </label>
-    <input type="file" id="avatar-upload" accept="image/*" style="display: none;" />
-    
-    <h2>Welcome to the Lounge</h2>
-    <p>Upload a photo and enter your name</p>
-    
-    <!-- Borang disusun secara menegak untuk keseimbangan -->
-    <form id="username-form">
-      <input id="username-input" maxlength="24" placeholder="Your name" required />
-      <button type="submit">Start Chatting</button>
-    </form>
+    <div class="modal-card">
+      <button id="close-modal-btn" class="close-btn" aria-label="Close">&times;</button>
+      
+      <label for="avatar-upload" id="avatar-preview">
+        <span>📷</span>
+      </label>
+      <input type="file" id="avatar-upload" accept="image/*" style="display: none;" />
+      
+      <h2>Welcome to the Lounge</h2>
+      <p>Upload a photo and enter your name</p>
+      
+      <form id="username-form">
+        <input id="username-input" maxlength="24" placeholder="Your name" required />
+        <button type="submit">Start Chatting</button>
+      </form>
+    </div>
   </div>
-</div>
 
   <div id="toast"></div>
 
@@ -316,11 +353,11 @@
     const editProfileBtn = document.getElementById('edit-profile-btn');
     const avatarUpload = document.getElementById('avatar-upload');
     const avatarPreview = document.getElementById('avatar-preview');
+    const closeModalBtn = document.getElementById('close-modal-btn');
     
     const toast = document.getElementById('toast');
     const emojiBtn = document.getElementById('emoji-btn');
     const emojiPanel = document.getElementById('emoji-panel');
-    const closeModalBtn = document.getElementById('close-modal-btn');
 
     const MAX_LEN = 500;
     
@@ -339,7 +376,7 @@
       return palette[hash % palette.length];
     }
 
-    // Fungsi Pratonton Gambar & Auto-Compress
+    // Avatar Preview & Auto-Compress logic
     if (userAvatar) {
       avatarPreview.innerHTML = `<img src="${userAvatar}" style="width: 100%; height: 100%; object-fit: cover;" />`;
       avatarPreview.style.border = "none";
@@ -376,6 +413,7 @@
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
             
+            // Convert to JPEG with 0.7 quality to save bandwidth
             userAvatar = canvas.toDataURL('image/jpeg', 0.7);
             
             avatarPreview.innerHTML = `<img src="${userAvatar}" style="width: 100%; height: 100%; object-fit: cover;" />`;
@@ -387,10 +425,21 @@
       }
     });
 
-    // Klik Butang Gear untuk Buka Semula Modal
+    // Open Settings Modal
     editProfileBtn.addEventListener('click', () => {
       usernameInput.value = username;
       showUsernameModal();
+    });
+
+    // Close Settings Modal
+    closeModalBtn.addEventListener('click', () => {
+      if (username) {
+        usernameModal.classList.remove('visible');
+      } else {
+        toast.textContent = "Please enter a name to start chatting.";
+        toast.classList.add('visible');
+        setTimeout(() => toast.classList.remove('visible'), 2500);
+      }
     });
 
     function showUsernameModal() {
@@ -426,15 +475,7 @@
       if (name) joinChat(name);
     });
 
-    closeModalBtn.addEventListener('click', () => {
-      if (username) {
-        usernameModal.classList.remove('visible');
-      } else {
-        alert("Please enter a name to start chatting.");
-      }
-    });
-
-    // ---- Status Rangkaian ----
+    // ---- Connection Status ----
     socket.on('connect', () => {
       statusDot.className = 'dot online';
       statusText.textContent = lastKnownUserCount
@@ -458,7 +499,7 @@
       }
     });
 
-    // ---- Kawalan Menatal (Scroll) ----
+    // ---- Scroll Handling ----
     function isScrolledNearBottom() {
       return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
     }
@@ -477,7 +518,7 @@
       scrollBtn.classList.remove('visible');
     });
 
-    // ---- Paparkan Mesej ----
+    // ---- Render Messages ----
     function appendMessage(data) {
       const li = document.createElement('li');
 
@@ -549,7 +590,7 @@
 
     socket.on('chat message', appendMessage);
 
-    // ---- Tanda Sedang Menaip (Typing Indicator) ----
+    // ---- Typing Indicator ----
     function renderTypingIndicator() {
       if (typingUsers.size === 0) {
         typingIndicator.textContent = '';
@@ -582,7 +623,7 @@
       typingTimeout = setTimeout(() => socket.emit('stop typing'), 1200);
     });
 
-    // ---- Panel Emoji ----
+    // ---- Emoji Panel ----
     const EMOJIS = ['😀','😁','😂','🤣','😊','😍','😘','😜','🤔','😎','🥳','😴','😢','😭','😡','🤯','😇','🙄','👍','👎','👏','🙏','🔥','💯','❤️','💔','✨','🎉','🥰','😏','🤝','👀'];
     emojiPanel.innerHTML = EMOJIS.map((e) => `<button type="button">${e}</button>`).join('');
 
@@ -614,7 +655,7 @@
       field.setSelectionRange(pos, pos);
     }
 
-    // ---- Hantar Mesej ----
+    // ---- Send Message ----
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const text = input.value.trim();
@@ -629,7 +670,7 @@
       isNearBottom = true;
     });
 
-    // ---- Amaran Spam (Rate Limiting) ----
+    // ---- Rate Limiting Toast ----
     socket.on('rate limited', () => {
       toast.textContent = "You're sending messages a bit fast — give it a second.";
       toast.classList.add('visible');

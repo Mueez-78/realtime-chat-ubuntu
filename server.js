@@ -2,7 +2,7 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const { Server } = require('socket.io');
-const sqlite3 = require('sqlite3').verbose(); // <-- Modul Database Baharu
+const sqlite3 = require('sqlite3').verbose(); 
 
 const app = express();
 const server = http.createServer(app);
@@ -16,14 +16,14 @@ const RATE_LIMIT_WINDOW_MS = 3000;
 const RATE_LIMIT_MAX_MESSAGES = 5;
 
 // ==========================================
-// PANGKALAN DATA (DATABASE) SETUP
+// DATABASE SETUP
 // ==========================================
 const db = new sqlite3.Database('./chat.db', (err) => {
-  if (err) console.error('🔴 Gagal membuka database:', err.message);
-  else console.log('📁 Database SQLite (chat.db) berjaya disambungkan.');
+  if (err) console.error('🔴 Failed to open database:', err.message);
+  else console.log('📁 SQLite Database (chat.db) connected successfully.');
 });
 
-// Bina jadual (table) jika ia belum wujud
+// Create table if it doesn't exist
 db.run(`
   CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,8 +34,8 @@ db.run(`
   )
 `);
 
-// Status Pengguna (Ini tak perlu masuk database sebab hanya sementara)
-const connectedUsers = new Map();
+// Connected users state (temporary, no need for DB)
+const connectedUsers = new Map(); // socket.id -> { username, avatar, messageTimestamps: [] }
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
@@ -50,7 +50,7 @@ function broadcastUserList() {
   io.emit('user list', usernames);
 }
 
-// Sistem Anti-Spam
+// Anti-Spam System
 function isRateLimited(user) {
   const now = Date.now();
   user.messageTimestamps = user.messageTimestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
@@ -62,16 +62,16 @@ function isRateLimited(user) {
 io.on('connection', (socket) => {
   console.log(`🟢 Socket connected: ${socket.id}`);
 
-  // TARIK SEJARAH MESEJ DARI DATABASE (50 Mesej Terakhir)
+  // FETCH CHAT HISTORY FROM DATABASE (Last 50 messages)
   db.all(
     `SELECT user, avatar, text, time FROM messages ORDER BY id DESC LIMIT ?`,
     [MAX_HISTORY],
     (err, rows) => {
       if (err) {
-        console.error('Error membaca database:', err);
+        console.error('Database read error:', err);
         return;
       }
-      // Pusingkan susunan supaya mesej lama di atas, baharu di bawah
+      // Reverse so oldest is at the top, newest at the bottom
       const history = rows.reverse();
       socket.emit('load history', history);
     }
@@ -80,6 +80,7 @@ io.on('connection', (socket) => {
   socket.on('set username', (data) => {
     if (!data) return;
 
+    // Strict validation to prevent the [object Object] bug
     const rawUsername = typeof data === 'string' ? data : data.name;
     if (typeof rawUsername !== 'string') return; 
 
@@ -93,6 +94,7 @@ io.on('connection', (socket) => {
 
     connectedUsers.set(socket.id, { username, avatar, messageTimestamps: [] });
     broadcastUserList();
+    // System messages ("joined the chat") are removed to keep the chat clean
   });
 
   socket.on('chat message', (data) => {
@@ -114,19 +116,17 @@ io.on('connection', (socket) => {
       time: timestamp() 
     };
     
-    // SIMPAN MESEJ BAHARU KE DALAM DATABASE
+    // SAVE NEW MESSAGE TO DATABASE
     db.run(
       `INSERT INTO messages (user, avatar, text, time) VALUES (?, ?, ?, ?)`,
       [messageData.user, messageData.avatar, messageData.text, messageData.time],
       function(err) {
-        if (err) console.error('Error menyimpan mesej:', err.message);
+        if (err) console.error('Error saving message:', err.message);
       }
     );
 
-    // PENJAGAAN MEMORI KAD SD: Padam mesej yang terlalu lama supaya Pi Zero tak berat
-    // (Simpan maksimum 100 mesej sahaja dalam pangkalan data pada satu-satu masa)
-    db.run(`DELETE FROM messages WHERE id NOT IN (SELECT id FROM messages ORDER BY id DESC LIMIT 100)`);
 
+    db.run(`DELETE FROM messages WHERE id NOT IN (SELECT id FROM messages ORDER BY id DESC LIMIT 100)`);
     io.emit('chat message', messageData);
   });
 
