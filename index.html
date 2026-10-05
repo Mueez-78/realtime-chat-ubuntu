@@ -216,12 +216,14 @@
     const MAX_LEN = 500;
     
     const servers = [
-      { id: 'dit-lounge', name: 'DIT Lounge', icon: '🟢', isLocked: false, passcode: null },
-      { id: 'gaming', name: 'Gaming', icon: '🎮', isLocked: true, passcode: '1234' },
-      { id: 'study', name: 'Study', icon: '📚', isLocked: true, passcode: 'dit2026' },
-      { id: 'programming', name: 'Programming', icon: '💻', isLocked: false, passcode: null }
+      { id: 'dit-lounge', name: 'DIT Lounge', icon: '🟢', isLocked: false },
+      { id: 'gaming', name: 'Gaming', icon: '🎮', isLocked: true },
+      { id: 'study', name: 'Study', icon: '📚', isLocked: true },
+      { id: 'programming', name: 'Programming', icon: '💻', isLocked: false }
     ];
     let currentServer = 'dit-lounge';
+    // Passcodes typed this session (memory only) so a reconnect can rejoin a locked server
+    const enteredPasscodes = new Map();
 
     function renderServers() {
       serverList.innerHTML = '';
@@ -243,22 +245,41 @@
     function switchServer(serverId) {
       if (serverId === currentServer) return; 
       const activeServer = servers.find(s => s.id === serverId);
+      let passcode = null;
       if (activeServer.isLocked) {
-        const userInput = prompt(`Pelayan ${activeServer.name} dikunci.\nSila masukkan kod laluan:`);
-        if (userInput !== activeServer.passcode) {
+        passcode = prompt(`Pelayan ${activeServer.name} dikunci.\nSila masukkan kod laluan:`);
+        if (passcode === null) {
           toast.textContent = "Kod laluan salah atau dibatalkan. Akses ditolak!";
           toast.classList.add('visible');
           setTimeout(() => toast.classList.remove('visible'), 2500);
-          return; 
+          return;
         }
       }
-      currentServer = serverId;
-      headerTitle.textContent = activeServer.name;
-      headerAvatar.textContent = activeServer.icon;
-      renderServers();
-      closeSidebar();
-      socket.emit('join server', currentServer);
-      messagesEl.innerHTML = ''; 
+      joinServer(serverId, passcode, (ok, error) => {
+        if (!ok) {
+          toast.textContent = error;
+          toast.classList.add('visible');
+          setTimeout(() => toast.classList.remove('visible'), 2500);
+          return;
+        }
+        closeSidebar();
+      });
+    }
+
+    // The backend validates the server and passcode; the UI only switches once it agrees
+    function joinServer(serverId, passcode, done) {
+      socket.emit('join server', { serverId, passcode }, (res) => {
+        if (!res || !res.ok) return done(false, (res && res.error) || 'Akses ditolak!');
+        if (passcode !== null) enteredPasscodes.set(serverId, passcode);
+        const activeServer = servers.find(s => s.id === serverId);
+        currentServer = serverId;
+        headerTitle.textContent = activeServer.name;
+        headerAvatar.textContent = activeServer.icon;
+        renderServers();
+        messagesEl.innerHTML = '';
+        typingUsers.clear(); renderTypingIndicator();
+        done(true);
+      });
     }
 
     function openSidebar() { serverSidebar.classList.add('open'); sidebarOverlay.classList.add('visible'); }
@@ -344,7 +365,9 @@
     socket.on('login success', () => {
       usernameModal.classList.remove('visible');
       input.disabled = false; sendBtn.disabled = false; input.focus();
-      socket.emit('join server', currentServer); 
+      joinServer(currentServer, enteredPasscodes.get(currentServer) ?? null, (ok) => {
+        if (!ok) joinServer('dit-lounge', null, () => {});
+      });
     });
 
     socket.on('connect', () => {
