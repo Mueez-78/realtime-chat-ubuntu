@@ -59,19 +59,25 @@
   .server-rail { width: var(--rail-w); flex-shrink: 0; background: var(--bg-app); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
   .server-list { flex: 1; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; scrollbar-width: none; }
   .server-list::-webkit-scrollbar { display: none; }
-  .server-item { position: relative; width: 46px; height: 46px; flex-shrink: 0; border: none; padding: 0; border-radius: 14px; background: var(--bg-elev); display: flex; align-items: center; justify-content: center; transition: background 0.12s; }
-  .server-item:hover { background: #2a2b30; }
-  .server-item.active { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .server-item { position: relative; width: 46px; height: 46px; flex-shrink: 0; border: none; padding: 0; border-radius: 14px; background: var(--bg-elev); color: var(--muted); display: flex; align-items: center; justify-content: center; transition: background 0.12s, color 0.12s; }
+  .server-item:hover { background: #2a2b30; color: var(--text-2); }
+  .server-item.active { background: rgba(10,132,255,0.18); color: #fff; }
   .server-item::before { content: ''; position: absolute; left: -13px; top: 50%; width: 4px; height: 0; margin-top: 0; background: var(--text-2); border-radius: 0 3px 3px 0; transition: height 0.12s, margin-top 0.12s; }
   .server-item:hover::before { height: 16px; margin-top: -8px; }
   .server-item.active::before { height: 30px; margin-top: -15px; background: var(--accent); }
-  .server-icon { font-size: 1.35em; line-height: 1; }
-  .server-lock { position: absolute; right: -4px; bottom: -4px; width: 18px; height: 18px; border-radius: 50%; background: var(--bg-app); border: 1px solid var(--border-strong); display: flex; align-items: center; justify-content: center; color: var(--text-2); }
-  .server-lock svg { width: 10px; height: 10px; fill: currentColor; }
+  .server-icon { display: flex; align-items: center; justify-content: center; line-height: 1; }
+  .server-icon svg { width: 22px; height: 22px; }
+  .server-initial { font-size: 1.02em; font-weight: 600; letter-spacing: 0.01em; }
+  /* Secondary lock mark, tucked inside the button's bottom-right corner */
+  .server-lock { position: absolute; right: 4px; bottom: 4px; width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; color: var(--faint); background: var(--bg-elev); border-radius: 3px; }
+  .server-item:hover .server-lock { background: #2a2b30; }
+  .server-item.active .server-lock { color: rgba(255,255,255,0.75); background: transparent; }
+  .server-lock svg { width: 11px; height: 11px; stroke-width: 2.4; }
   .rail-separator { width: 28px; height: 1px; background: var(--border-strong); flex-shrink: 0; margin: 2px 0; }
   .rail-retry { width: 46px; height: 46px; border-radius: 14px; border: 1px dashed var(--danger); background: none; color: var(--danger); font-size: 1.2em; }
-  .add-server-btn { background: transparent; border: 1px dashed var(--border-strong); color: var(--accent-text); font-size: 1.5em; font-weight: 300; line-height: 1; }
-  .add-server-btn:hover { background: var(--accent-soft); border-color: var(--accent); }
+  .add-server-btn { background: transparent; border: 1px dashed var(--border-strong); color: var(--muted); }
+  .add-server-btn svg { width: 20px; height: 20px; }
+  .add-server-btn:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
 
   /* ---------- Channel panel ---------- */
   .channel-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-panel); border-right: 1px solid var(--border); }
@@ -208,9 +214,10 @@
   .field-hint { font-size: 0.76em; color: var(--faint); }
   .lock-status { font-size: 0.82em; color: var(--muted); padding: 2px 0; }
   .icon-choices { display: flex; flex-wrap: wrap; gap: 6px; }
-  .icon-choices button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-input); font-size: 1.15em; transition: border-color 0.12s, background 0.12s; }
-  .icon-choices button:hover { border-color: var(--border-strong); }
-  .icon-choices button.selected { border-color: var(--accent); background: var(--accent-soft); }
+  .icon-choices button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-input); color: var(--muted); display: flex; align-items: center; justify-content: center; padding: 0; transition: border-color 0.12s, background 0.12s, color 0.12s; }
+  .icon-choices button svg { width: 20px; height: 20px; }
+  .icon-choices button:hover { border-color: var(--border-strong); color: var(--text-2); }
+  .icon-choices button.selected { border-color: var(--accent); background: var(--accent-soft); color: #fff; }
   .btn-primary { width: 100%; padding: 11px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; margin-top: 4px; transition: background 0.12s; }
   .btn-primary:hover { background: var(--accent-hover); }
   .btn-primary:active { background: var(--accent-press); }
@@ -505,7 +512,45 @@
 
     const MAX_LEN = 500;
     const MAX_NAME_LEN = 24;
-    const LOCK_ICON = '<svg viewBox="0 0 24 24"><path d="M17 9V7A5 5 0 0 0 7 7v2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zM9 7a3 3 0 0 1 6 0v2H9V7z"/></svg>';
+    // ---------- Server icons: one monochrome line-icon family (24×24, stroke = currentColor) ----------
+    const LINE_ICONS = {
+      monogram: '<path d="M7 4.5h4.5a7.5 7.5 0 0 1 0 15H10L7 22z"/>', // "D" with a chat-bubble tail (DIT Lounge)
+      chat: '<path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4z"/>',
+      hash: '<path d="M9.5 4 7.5 20M16.5 4l-2 16M5 9h15M4 15h15"/>',
+      gamepad: '<path d="M7 8h10a4 4 0 0 1 3.9 4.8l-.8 3.6a2.2 2.2 0 0 1-3.9.9L14.5 15h-5l-1.7 2.3a2.2 2.2 0 0 1-3.9-.9l-.8-3.6A4 4 0 0 1 7 8z"/><path d="M8.5 10.5v3M7 12h3M15.5 11.5h.01M17 13.5h.01"/>',
+      book: '<path d="M12 6.5C10.5 5 8 4.5 4 4.5v13c4 0 6.5.5 8 2 1.5-1.5 4-2 8-2v-13c-4 0-6.5.5-8 2z"/><path d="M12 6.5v13"/>',
+      code: '<path d="M8.5 7 3.5 12l5 5M15.5 7l5 5-5 5M13.5 5l-3 14"/>',
+      megaphone: '<path d="M4 10v4h3l8 4.5v-13L7 10z"/><path d="M18 9.5a3.5 3.5 0 0 1 0 5M7 14l1.2 5h2.3l-1-4.4"/>',
+      music: '<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
+      trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 3M16 6h3a3 3 0 0 1-3 3M12 13v4M9 20h6"/>',
+      palette: '<path d="M12 4a8 8 0 1 0 0 16c1.1 0 1.6-.9 1.2-1.8-.5-1.1.2-2.2 1.4-2.2H17a3 3 0 0 0 3-3c0-5-3.6-9-8-9z"/><path d="M8 11h.01M10.5 7.5h.01M15 8h.01"/>',
+      flask: '<path d="M9.5 4h5M10.5 4v5.5L5.6 18a1.4 1.4 0 0 0 1.2 2h10.4a1.4 1.4 0 0 0 1.2-2l-4.9-8.5V4M8 14h8"/>',
+      cup: '<path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 10h1.5a2.5 2.5 0 0 1 0 5H16M8.5 4.5v2M12 4.5v2"/>',
+      moon: '<path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/>',
+      flame: '<path d="M12 20a6 6 0 0 0 6-6c0-4-3-6-4-9-1.5 2-2.5 3-3 5-1-1-1.5-2-1.5-3C7.5 9 6 11.5 6 14a6 6 0 0 0 6 6z"/>',
+      star: '<path d="m12 4 2.4 5 5.4.6-4 3.7 1.1 5.3L12 16l-4.9 2.6 1.1-5.3-4-3.7 5.4-.6z"/>',
+      plus: '<path d="M12 5v14M5 12h14"/>',
+      lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+    };
+    function lineIcon(name) {
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LINE_ICONS[name]}</svg>`;
+    }
+    // Servers store a short emoji/text icon (backend data is unchanged); the UI shows the matching line icon.
+    const SERVER_ICON_BY_ID = { 'dit-lounge': 'monogram' };
+    const SERVER_ICON_BY_VALUE = {
+      '💬': 'chat', '🟢': 'chat', '#': 'hash', '🎮': 'gamepad', '📚': 'book', '📖': 'book', '💻': 'code',
+      '📢': 'megaphone', '📣': 'megaphone', '🎵': 'music', '🎶': 'music', '⚽': 'trophy', '🏆': 'trophy',
+      '🎨': 'palette', '🧪': 'flask', '🍔': 'cup', '☕': 'cup', '🌙': 'moon', '🔥': 'flame', '⭐': 'star',
+    };
+    // Fills `el` with the server's line icon, or its initial when the stored icon has no line equivalent
+    function fillServerIcon(el, server) {
+      const name = SERVER_ICON_BY_ID[server.id] || SERVER_ICON_BY_VALUE[server.icon];
+      el.dataset.icon = name || 'initial';
+      if (name) { el.innerHTML = lineIcon(name); return; } // static markup
+      el.textContent = (server.name || '?').trim().charAt(0).toUpperCase();
+      el.classList.add('server-initial');
+    }
+    const LOCK_ICON = lineIcon('lock');
     const TRASH_ICON = '<svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9zm4 2v8h2v-8h-2zm4 0v8h2v-8h-2z"/></svg>';
     let lastKnownUserCount = 0; let typingTimeout = null; const typingUsers = new Set(); let isNearBottom = true; let toastTimeout = null;
 
@@ -726,7 +771,7 @@
         btn.title = s.name + (s.isLocked ? ' 🔒' : '');
         btn.setAttribute('aria-label', s.name + (s.isLocked ? ' (locked)' : ''));
         if (s.id === currentServer) btn.setAttribute('aria-current', 'true');
-        const icon = document.createElement('span'); icon.className = 'server-icon'; icon.textContent = s.icon;
+        const icon = document.createElement('span'); icon.className = 'server-icon'; fillServerIcon(icon, s);
         btn.appendChild(icon);
         if (s.isLocked) {
           const lock = document.createElement('span'); lock.className = 'server-lock'; lock.setAttribute('aria-hidden', 'true');
@@ -745,7 +790,7 @@
         addBtn.className = 'server-item add-server-btn';
         addBtn.title = 'Add Server';
         addBtn.setAttribute('aria-label', 'Add Server');
-        addBtn.textContent = '+';
+        addBtn.innerHTML = lineIcon('plus'); // static markup
         addBtn.addEventListener('click', () => openAdminModal('create'));
         serverList.appendChild(addBtn);
       }
@@ -921,19 +966,24 @@
     // ==========================================
     // Admin: add server + change server password (the backend re-checks admin rights on every request)
     // ==========================================
-    const SERVER_ICONS = ['💬', '🎮', '📚', '💻', '🎵', '⚽', '🎨', '🧪', '🍔', '🌙', '🔥', '⭐'];
+    // Values are what the backend stores; the picker shows the same line icons the rail will use
+    const SERVER_ICONS = ['💬', '🎮', '📚', '💻', '📢', '🎵', '⚽', '🎨', '🧪', '🍔', '🌙', '⭐'];
+    const ICON_LABELS = { chat: 'Chat', gamepad: 'Gaming', book: 'Study', code: 'Code', megaphone: 'Announcements', music: 'Music', trophy: 'Sports', palette: 'Art', flask: 'Science', cup: 'Food & drink', moon: 'Night', star: 'Star' };
     let selectedIcon = SERVER_ICONS[0];
 
     function renderIconChoices() {
       iconChoices.innerHTML = '';
       SERVER_ICONS.forEach(icon => {
+        const name = SERVER_ICON_BY_VALUE[icon];
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.textContent = icon;
+        btn.innerHTML = lineIcon(name); // static markup
+        btn.dataset.icon = name;
         btn.className = icon === selectedIcon ? 'selected' : '';
         btn.setAttribute('role', 'radio');
         btn.setAttribute('aria-checked', String(icon === selectedIcon));
-        btn.setAttribute('aria-label', 'Icon ' + icon);
+        btn.setAttribute('aria-label', ICON_LABELS[name] + ' icon');
+        btn.title = ICON_LABELS[name];
         btn.addEventListener('click', () => { selectedIcon = icon; renderIconChoices(); });
         iconChoices.appendChild(btn);
       });
@@ -945,7 +995,7 @@
       servers.forEach(s => {
         const option = document.createElement('option');
         option.value = s.id;
-        option.textContent = `${s.icon} ${s.name}${s.isLocked ? ' 🔒' : ''}`;
+        option.textContent = `${s.name}${s.isLocked ? ' (locked)' : ''}`;
         passwordServerSelect.appendChild(option);
       });
       if (findServer(keep)) passwordServerSelect.value = keep;
