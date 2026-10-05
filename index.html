@@ -59,24 +59,23 @@
   .server-rail { width: var(--rail-w); flex-shrink: 0; background: var(--bg-app); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
   .server-list { flex: 1; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; scrollbar-width: none; }
   .server-list::-webkit-scrollbar { display: none; }
-  .server-item { position: relative; width: 46px; height: 46px; flex-shrink: 0; border: none; padding: 0; border-radius: 14px; background: var(--bg-elev); color: var(--muted); display: flex; align-items: center; justify-content: center; transition: background 0.12s, color 0.12s; }
-  .server-item:hover { background: #2a2b30; color: var(--text-2); }
-  .server-item.active { background: rgba(10,132,255,0.18); color: #fff; }
+  .server-item { position: relative; width: 44px; height: 44px; flex-shrink: 0; border: none; padding: 0; border-radius: 12px; background: rgba(255,255,255,0.04); color: var(--muted); display: flex; align-items: center; justify-content: center; transition: background 0.12s, color 0.12s; }
+  .server-item:hover { background: rgba(255,255,255,0.08); color: var(--text-2); }
+  .server-item.active { background: rgba(10,132,255,0.15); color: #fff; }
   .server-item::before { content: ''; position: absolute; left: -13px; top: 50%; width: 4px; height: 0; margin-top: 0; background: var(--text-2); border-radius: 0 3px 3px 0; transition: height 0.12s, margin-top 0.12s; }
   .server-item:hover::before { height: 16px; margin-top: -8px; }
   .server-item.active::before { height: 30px; margin-top: -15px; background: var(--accent); }
   .server-icon { display: flex; align-items: center; justify-content: center; line-height: 1; }
-  .server-icon svg { width: 22px; height: 22px; }
-  .server-initial { font-size: 1.02em; font-weight: 600; letter-spacing: 0.01em; }
+  .server-icon svg { width: 19px; height: 19px; }
+  .server-initial { font-size: 0.95em; font-weight: 600; }
   /* Secondary lock mark, tucked inside the button's bottom-right corner */
-  .server-lock { position: absolute; right: 4px; bottom: 4px; width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; color: var(--faint); background: var(--bg-elev); border-radius: 3px; }
-  .server-item:hover .server-lock { background: #2a2b30; }
-  .server-item.active .server-lock { color: rgba(255,255,255,0.75); background: transparent; }
-  .server-lock svg { width: 11px; height: 11px; stroke-width: 2.4; }
+  .server-lock { position: absolute; right: 3px; bottom: 3px; width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; color: var(--faint); }
+  .server-item.active .server-lock { color: rgba(255,255,255,0.6); }
+  .server-lock svg { width: 11px; height: 11px; stroke-width: 2.2; }
   .rail-separator { width: 28px; height: 1px; background: var(--border-strong); flex-shrink: 0; margin: 2px 0; }
-  .rail-retry { width: 46px; height: 46px; border-radius: 14px; border: 1px dashed var(--danger); background: none; color: var(--danger); font-size: 1.2em; }
+  .rail-retry { width: 44px; height: 44px; border-radius: 12px; border: 1px dashed var(--danger); background: none; color: var(--danger); font-size: 1.2em; }
   .add-server-btn { background: transparent; border: 1px dashed var(--border-strong); color: var(--muted); }
-  .add-server-btn svg { width: 20px; height: 20px; }
+  .add-server-btn svg { width: 18px; height: 18px; }
   .add-server-btn:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
 
   /* ---------- Channel panel ---------- */
@@ -84,6 +83,11 @@
   .channel-panel-header { height: var(--header-h); padding: 0 8px 0 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .channel-server-name { font-weight: 600; font-size: 0.97em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .channel-header-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+  .channel-panel-header { position: relative; }
+  .admin-menu { position: absolute; top: calc(100% - 6px); right: 8px; z-index: 30; min-width: 200px; padding: 6px; background: var(--bg-elev); border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.35); display: flex; flex-direction: column; }
+  .admin-menu-label { padding: 6px 8px 4px; font-size: 0.68em; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--faint); }
+  .admin-menu button { background: none; border: none; text-align: left; padding: 8px; min-height: 36px; border-radius: 6px; font-size: 0.9em; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .admin-menu button:hover, .admin-menu button:focus-visible { background: var(--accent-soft); color: var(--text); outline: none; }
   .channel-section-title, .member-section-title { padding: 16px 16px 6px; font-size: 0.7em; font-weight: 600; letter-spacing: 0.05em; color: var(--faint); text-transform: uppercase; }
   .channel-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; display: flex; flex-direction: column; gap: 1px; }
   .channel-item { width: 100%; min-height: 36px; background: none; border: none; color: var(--muted); text-align: left; padding: 6px 8px; border-radius: 6px; display: flex; align-items: center; gap: 8px; font-size: 0.95em; transition: background 0.12s, color 0.12s; }
@@ -215,7 +219,7 @@
   .lock-status { font-size: 0.82em; color: var(--muted); padding: 2px 0; }
   .icon-choices { display: flex; flex-wrap: wrap; gap: 6px; }
   .icon-choices button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-input); color: var(--muted); display: flex; align-items: center; justify-content: center; padding: 0; transition: border-color 0.12s, background 0.12s, color 0.12s; }
-  .icon-choices button svg { width: 20px; height: 20px; }
+  .icon-choices button svg { width: 19px; height: 19px; }
   .icon-choices button:hover { border-color: var(--border-strong); color: var(--text-2); }
   .icon-choices button.selected { border-color: var(--accent); background: var(--accent-soft); color: #fff; }
   .btn-primary { width: 100%; padding: 11px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; margin-top: 4px; transition: background 0.12s; }
@@ -225,6 +229,8 @@
   .btn-secondary { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: none; color: var(--text); font-weight: 500; transition: background 0.12s; }
   .btn-secondary:hover { background: var(--hover); }
   .btn-secondary:disabled { opacity: 0.45; cursor: default; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 4px; }
+  .modal-actions .btn-primary, .modal-actions .btn-secondary { flex: 1; margin-top: 0; }
   .link-btn { background: none; border: none; color: var(--muted); font-size: 0.82em; padding: 8px 12px; margin-top: 10px; border-radius: 6px; }
   .link-btn:hover { color: var(--accent-text); }
 
@@ -268,12 +274,20 @@
         <div class="channel-panel-header">
           <span class="channel-server-name" id="channel-server-name"></span>
           <div class="channel-header-actions">
-            <button type="button" id="server-settings-btn" class="icon-btn" title="Change server password" aria-label="Change server password" hidden>
-              <svg viewBox="0 0 24 24"><path d="M12.65 10A6 6 0 1 0 12.65 14H17v4h4v-4h2v-4H12.65zM7 14a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg>
+            <button type="button" id="server-settings-btn" class="icon-btn" title="Server options" aria-label="Server options" aria-haspopup="menu" aria-expanded="false" aria-controls="admin-menu" hidden>
+              <svg viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18.5" cy="12" r="1.7"/></svg>
             </button>
             <button type="button" id="close-sidebar-btn" class="icon-btn drawer-close" aria-label="Close menu">
               <svg viewBox="0 0 24 24"><path d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4z"/></svg>
             </button>
+          </div>
+          <!-- Admin-only options for the current server/channel (the backend checks admin rights on every action) -->
+          <div class="admin-menu" id="admin-menu" role="menu" aria-label="Server options" hidden>
+            <div class="admin-menu-label">Server</div>
+            <button type="button" role="menuitem" id="menu-edit-server">Server settings</button>
+            <button type="button" role="menuitem" id="menu-server-password">Change password</button>
+            <div class="admin-menu-label">Channel</div>
+            <button type="button" role="menuitem" id="menu-rename-channel">Rename channel</button>
           </div>
         </div>
         <div class="channel-section-title">Text channels</div>
@@ -424,6 +438,41 @@
           <button type="button" class="btn-secondary" id="server-password-remove">Remove Password</button>
         </form>
       </section>
+
+      <section id="server-edit-panel" hidden>
+        <div class="brand">Admin</div>
+        <h2>Server Settings</h2>
+        <p>Renaming keeps the server's history and links.</p>
+        <form id="server-edit-form" class="modal-form" novalidate>
+          <label class="field-label" for="edit-server-name">Server name</label>
+          <input id="edit-server-name" maxlength="32" autocomplete="off" required />
+          <span class="field-label" id="edit-icon-label">Icon</span>
+          <div class="icon-choices" id="edit-icon-choices" role="radiogroup" aria-labelledby="edit-icon-label"></div>
+          <span class="field-hint" id="edit-icon-note" hidden>This server uses the DIT Lounge mark.</span>
+          <div class="form-error" id="server-edit-error" role="alert"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" data-close-admin>Cancel</button>
+            <button type="submit" class="btn-primary" id="server-edit-submit">Save</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="channel-rename-panel" hidden>
+        <div class="brand">Admin</div>
+        <h2>Rename Channel</h2>
+        <p>Only the display name changes; messages stay in the channel.</p>
+        <form id="channel-rename-form" class="modal-form" novalidate>
+          <label class="field-label" for="rename-channel-select">Channel</label>
+          <select id="rename-channel-select"></select>
+          <label class="field-label" for="rename-channel-name">New name</label>
+          <input id="rename-channel-name" maxlength="32" autocomplete="off" required />
+          <div class="form-error" id="channel-rename-error" role="alert"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" data-close-admin>Cancel</button>
+            <button type="submit" class="btn-primary" id="channel-rename-submit">Save</button>
+          </div>
+        </form>
+      </section>
     </div>
   </div>
 
@@ -505,6 +554,23 @@
     const serverPasswordSuccess = document.getElementById('server-password-success');
     const serverPasswordSubmit = document.getElementById('server-password-submit');
     const serverPasswordRemove = document.getElementById('server-password-remove');
+    const adminMenu = document.getElementById('admin-menu');
+    const menuEditServer = document.getElementById('menu-edit-server');
+    const menuServerPassword = document.getElementById('menu-server-password');
+    const menuRenameChannel = document.getElementById('menu-rename-channel');
+    const serverEditPanel = document.getElementById('server-edit-panel');
+    const serverEditForm = document.getElementById('server-edit-form');
+    const editServerName = document.getElementById('edit-server-name');
+    const editIconChoices = document.getElementById('edit-icon-choices');
+    const editIconNote = document.getElementById('edit-icon-note');
+    const serverEditError = document.getElementById('server-edit-error');
+    const serverEditSubmit = document.getElementById('server-edit-submit');
+    const channelRenamePanel = document.getElementById('channel-rename-panel');
+    const channelRenameForm = document.getElementById('channel-rename-form');
+    const renameChannelSelect = document.getElementById('rename-channel-select');
+    const renameChannelName = document.getElementById('rename-channel-name');
+    const channelRenameError = document.getElementById('channel-rename-error');
+    const channelRenameSubmit = document.getElementById('channel-rename-submit');
 
     const toast = document.getElementById('toast');
     const emojiBtn = document.getElementById('emoji-btn');
@@ -514,26 +580,27 @@
     const MAX_NAME_LEN = 24;
     // ---------- Server icons: one monochrome line-icon family (24×24, stroke = currentColor) ----------
     const LINE_ICONS = {
-      monogram: '<path d="M7 4.5h4.5a7.5 7.5 0 0 1 0 15H10L7 22z"/>', // "D" with a chat-bubble tail (DIT Lounge)
-      chat: '<path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4z"/>',
-      hash: '<path d="M9.5 4 7.5 20M16.5 4l-2 16M5 9h15M4 15h15"/>',
-      gamepad: '<path d="M7 8h10a4 4 0 0 1 3.9 4.8l-.8 3.6a2.2 2.2 0 0 1-3.9.9L14.5 15h-5l-1.7 2.3a2.2 2.2 0 0 1-3.9-.9l-.8-3.6A4 4 0 0 1 7 8z"/><path d="M8.5 10.5v3M7 12h3M15.5 11.5h.01M17 13.5h.01"/>',
-      book: '<path d="M12 6.5C10.5 5 8 4.5 4 4.5v13c4 0 6.5.5 8 2 1.5-1.5 4-2 8-2v-13c-4 0-6.5.5-8 2z"/><path d="M12 6.5v13"/>',
-      code: '<path d="M8.5 7 3.5 12l5 5M15.5 7l5 5-5 5M13.5 5l-3 14"/>',
-      megaphone: '<path d="M4 10v4h3l8 4.5v-13L7 10z"/><path d="M18 9.5a3.5 3.5 0 0 1 0 5M7 14l1.2 5h2.3l-1-4.4"/>',
-      music: '<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
-      trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 3M16 6h3a3 3 0 0 1-3 3M12 13v4M9 20h6"/>',
-      palette: '<path d="M12 4a8 8 0 1 0 0 16c1.1 0 1.6-.9 1.2-1.8-.5-1.1.2-2.2 1.4-2.2H17a3 3 0 0 0 3-3c0-5-3.6-9-8-9z"/><path d="M8 11h.01M10.5 7.5h.01M15 8h.01"/>',
-      flask: '<path d="M9.5 4h5M10.5 4v5.5L5.6 18a1.4 1.4 0 0 0 1.2 2h10.4a1.4 1.4 0 0 0 1.2-2l-4.9-8.5V4M8 14h8"/>',
-      cup: '<path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5z"/><path d="M16 10h1.5a2.5 2.5 0 0 1 0 5H16M8.5 4.5v2M12 4.5v2"/>',
-      moon: '<path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/>',
-      flame: '<path d="M12 20a6 6 0 0 0 6-6c0-4-3-6-4-9-1.5 2-2.5 3-3 5-1-1-1.5-2-1.5-3C7.5 9 6 11.5 6 14a6 6 0 0 0 6 6z"/>',
-      star: '<path d="m12 4 2.4 5 5.4.6-4 3.7 1.1 5.3L12 16l-4.9 2.6 1.1-5.3-4-3.7 5.4-.6z"/>',
-      plus: '<path d="M12 5v14M5 12h14"/>',
-      lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+      // Product mark for DIT Lounge: a "D" whose lower-left corner hints at a chat-bubble tail
+      monogram: '<path d="M8 5h3.5a7 7 0 0 1 0 14H10l-2 2z"/>',
+      chat: '<path d="M5 7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H10l-5 4z"/>',
+      hash: '<path d="M10 5 8.5 19M15.5 5 14 19M6 9.5h13M5 14.5h13"/>',
+      gamepad: '<path d="M8 8h8a4 4 0 0 1 4 4v1.5a2.5 2.5 0 0 1-4.6 1.4L14.6 14H9.4l-.8.9A2.5 2.5 0 0 1 4 13.5V12a4 4 0 0 1 4-4z"/><path d="M8.5 10.5v2.5M7.25 11.75h2.5"/>',
+      book: '<path d="M12 7c-1.8-1.3-4-1.8-7-1.8v12c3 0 5.2.5 7 1.8 1.8-1.3 4-1.8 7-1.8v-12c-3 0-5.2.5-7 1.8z"/><path d="M12 7v12"/>',
+      code: '<path d="m9 8.5-3.5 3.5L9 15.5M15 8.5l3.5 3.5-3.5 3.5"/>',
+      megaphone: '<path d="M5 10v4h2.5L15 18V6l-7.5 4z"/><path d="M7.5 14l1 4"/>',
+      music: '<path d="M9.5 17V7l9-2v10"/><circle cx="7" cy="17" r="2.5"/><circle cx="16" cy="15" r="2.5"/>',
+      trophy: '<path d="M8 5h8v4a4 4 0 0 1-8 0z"/><path d="M12 13v4M9 19h6"/>',
+      palette: '<path d="M12 5a7 7 0 1 0 0 14c1 0 1.4-.8 1-1.6-.4-1 .2-1.9 1.2-1.9H16a3 3 0 0 0 3-3c0-4.3-3.1-7.5-7-7.5z"/>',
+      flask: '<path d="M10 5h4M11 5v5l-4.5 7.5A1.6 1.6 0 0 0 7.9 20h8.2a1.6 1.6 0 0 0 1.4-2.5L13 10V5"/>',
+      cup: '<path d="M6 9h10v4.5a4.5 4.5 0 0 1-4.5 4.5h-1A4.5 4.5 0 0 1 6 13.5z"/><path d="M16 10.5h1a2.5 2.5 0 0 1 0 5h-1"/>',
+      moon: '<path d="M18.5 14.5A7 7 0 0 1 9.5 5.5a7 7 0 1 0 9 9z"/>',
+      flame: '<path d="M12 19.5a5.5 5.5 0 0 0 5.5-5.5c0-3.5-2.5-5.5-3.5-8.5-2 2-4 4.5-4 6.5a1.8 1.8 0 0 1-2-2C7 11.5 6.5 12.8 6.5 14a5.5 5.5 0 0 0 5.5 5.5z"/>',
+      star: '<path d="m12 5 2.1 4.4 4.8.6-3.5 3.3.9 4.7L12 15.7 7.7 18l.9-4.7L5.1 10l4.8-.6z"/>',
+      plus: '<path d="M12 6v12M6 12h12"/>',
+      lock: '<rect x="5.5" y="11" width="13" height="9" rx="2"/><path d="M8.5 11V8.5a3.5 3.5 0 0 1 7 0V11"/>',
     };
     function lineIcon(name) {
-      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LINE_ICONS[name]}</svg>`;
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LINE_ICONS[name]}</svg>`;
     }
     // Servers store a short emoji/text icon (backend data is unchanged); the UI shows the matching line icon.
     const SERVER_ICON_BY_ID = { 'dit-lounge': 'monogram' };
@@ -675,7 +742,8 @@
     closeModalBtn.addEventListener('click', () => { if (displayName) closeEntry(); });
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
-      if (adminModal.classList.contains('visible')) closeAdminModal();
+      if (!adminMenu.hidden) { closeAdminMenu(); serverSettingsBtn.focus(); }
+      else if (adminModal.classList.contains('visible')) closeAdminModal();
       else if (usernameModal.classList.contains('visible') && displayName) closeEntry();
       else { closeSidebar(); closeMembers(); }
     });
@@ -855,8 +923,19 @@
           servers = list;
           renderServers(); renderChannels();
           const current = findServer(currentServer);
-          if (current) setHeader(current, current.channels.find(c => c.id === currentChannel)); // lock state may have changed
+          // Names or lock state may have changed: refresh everything that shows them (ids never change)
+          if (current) {
+            const channel = current.channels.find(c => c.id === currentChannel);
+            setHeader(current, channel);
+            if (channel) input.placeholder = `Message #${channel.name}`;
+            const intro = messagesEl.querySelector('.channel-intro');
+            if (intro && channel) {
+              intro.querySelector('h3').textContent = `Welcome to #${channel.name}`;
+              intro.querySelector('p').textContent = `This is the start of the #${channel.name} channel in ${current.name}.`;
+            }
+          }
           if (adminModal.classList.contains('visible') && !serverPasswordPanel.hidden) renderPasswordPanel();
+          if (adminModal.classList.contains('visible') && !channelRenamePanel.hidden) renderRenameChannelPanel();
         })
         .catch(() => {}); // keep the current list; the next refresh or reconnect will retry
     }
@@ -914,7 +993,8 @@
       if (!canNavigate()) return;
       const activeServer = findServer(serverId);
       let passcode = null;
-      if (activeServer.isLocked) {
+      // Admins are let in by the backend without a password; guests are asked for it
+      if (activeServer.isLocked && !isAdmin) {
         passcode = askPasscode(activeServer);
         if (passcode === null) return showToast('Cancelled. This server needs a password.');
       }
@@ -949,7 +1029,7 @@
         target = findServer(localStorage.getItem('lastServerId')) || fallback;
         const lastChannel = localStorage.getItem('lastChannelId');
         if (target.channels.some(c => c.id === lastChannel)) channelId = lastChannel;
-        if (target.isLocked) {
+        if (target.isLocked && !isAdmin) {
           // A refresh never bypasses the lock: the passcode has to be typed again
           passcode = enteredPasscodes.get(target.id) ?? askPasscode(target);
           if (passcode === null) { target = fallback; channelId = undefined; }
@@ -969,24 +1049,32 @@
     // Values are what the backend stores; the picker shows the same line icons the rail will use
     const SERVER_ICONS = ['💬', '🎮', '📚', '💻', '📢', '🎵', '⚽', '🎨', '🧪', '🍔', '🌙', '⭐'];
     const ICON_LABELS = { chat: 'Chat', gamepad: 'Gaming', book: 'Study', code: 'Code', megaphone: 'Announcements', music: 'Music', trophy: 'Sports', palette: 'Art', flask: 'Science', cup: 'Food & drink', moon: 'Night', star: 'Star' };
-    let selectedIcon = SERVER_ICONS[0];
+    let selectedIcon = SERVER_ICONS[0];       // Add Server picker
+    let editSelectedIcon;                       // Server Settings picker (undefined = keep current icon)
 
-    function renderIconChoices() {
-      iconChoices.innerHTML = '';
+    // Shared icon picker: shows line icons, keeps the stored value (e.g. '🎮') as the selection
+    function renderIconPicker(container, selected, onSelect) {
+      container.innerHTML = '';
       SERVER_ICONS.forEach(icon => {
         const name = SERVER_ICON_BY_VALUE[icon];
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.innerHTML = lineIcon(name); // static markup
         btn.dataset.icon = name;
-        btn.className = icon === selectedIcon ? 'selected' : '';
+        btn.className = icon === selected ? 'selected' : '';
         btn.setAttribute('role', 'radio');
-        btn.setAttribute('aria-checked', String(icon === selectedIcon));
+        btn.setAttribute('aria-checked', String(icon === selected));
         btn.setAttribute('aria-label', ICON_LABELS[name] + ' icon');
         btn.title = ICON_LABELS[name];
-        btn.addEventListener('click', () => { selectedIcon = icon; renderIconChoices(); });
-        iconChoices.appendChild(btn);
+        btn.addEventListener('click', () => onSelect(icon));
+        container.appendChild(btn);
       });
+    }
+    function renderIconChoices() {
+      renderIconPicker(iconChoices, selectedIcon, (icon) => { selectedIcon = icon; renderIconChoices(); });
+    }
+    function renderEditIconChoices() {
+      renderIconPicker(editIconChoices, editSelectedIcon, (icon) => { editSelectedIcon = icon; renderEditIconChoices(); });
     }
 
     function renderPasswordPanel(selectId) {
@@ -1006,22 +1094,55 @@
       serverPasswordRemove.disabled = !(server && server.isLocked);
     }
 
+    // Channels of the current server; keeps the chosen channel (and the typed name) across live refreshes
+    function renderRenameChannelPanel(selectId, resetName) {
+      const server = findServer(currentServer);
+      const keep = selectId || renameChannelSelect.value || currentChannel;
+      renameChannelSelect.innerHTML = '';
+      (server ? server.channels : []).forEach(c => {
+        const option = document.createElement('option');
+        option.value = c.id; option.textContent = '#' + c.name;
+        renameChannelSelect.appendChild(option);
+      });
+      if (server && server.channels.some(c => c.id === keep)) renameChannelSelect.value = keep;
+      const channel = server && server.channels.find(c => c.id === renameChannelSelect.value);
+      if (resetName && channel) renameChannelName.value = channel.name;
+    }
+
+    const ADMIN_PANELS = { create: createServerPanel, password: serverPasswordPanel, edit: serverEditPanel, channel: channelRenamePanel };
+    const ADMIN_PANEL_TITLES = { create: 'Add Server', password: 'Server Password', edit: 'Server Settings', channel: 'Rename Channel' };
+
     function openAdminModal(panel, serverId) {
       if (!isAdmin) return;
-      closeSidebar();
-      createServerPanel.hidden = panel !== 'create';
-      serverPasswordPanel.hidden = panel !== 'password';
-      createServerError.textContent = ''; serverPasswordError.textContent = ''; serverPasswordSuccess.textContent = '';
+      closeSidebar(); closeAdminMenu();
+      Object.entries(ADMIN_PANELS).forEach(([key, el]) => { el.hidden = key !== panel; });
+      [createServerError, serverPasswordError, serverPasswordSuccess, serverEditError, channelRenameError].forEach(el => { el.textContent = ''; });
+      let focusEl;
       if (panel === 'create') {
         createServerForm.reset(); selectedIcon = SERVER_ICONS[0]; renderIconChoices();
-        adminModal.setAttribute('aria-label', 'Add Server');
-      } else {
+        focusEl = newServerName;
+      } else if (panel === 'password') {
         serverNewPassword.value = '';
         renderPasswordPanel(serverId);
-        adminModal.setAttribute('aria-label', 'Server Password');
+        focusEl = serverNewPassword;
+      } else if (panel === 'edit') {
+        const server = findServer(currentServer);
+        if (!server) return;
+        editServerName.value = server.name;
+        // Servers with a fixed mark (DIT Lounge) don't use the icon setting
+        const fixedMark = !!SERVER_ICON_BY_ID[server.id];
+        editIconChoices.hidden = fixedMark; editIconNote.hidden = !fixedMark;
+        editSelectedIcon = SERVER_ICONS.includes(server.icon) ? server.icon : undefined;
+        renderEditIconChoices();
+        focusEl = editServerName;
+      } else if (panel === 'channel') {
+        renderRenameChannelPanel(currentChannel, true);
+        focusEl = renameChannelName;
       }
+      adminModal.setAttribute('aria-label', ADMIN_PANEL_TITLES[panel]);
       adminModal.classList.add('visible');
-      (panel === 'create' ? newServerName : serverNewPassword).focus();
+      focusEl.focus();
+      if (panel === 'edit' || panel === 'channel') focusEl.select();
     }
 
     function closeAdminModal() { adminModal.classList.remove('visible'); }
@@ -1029,12 +1150,74 @@
     // Show/hide admin-only controls for the current session (cosmetic: the backend enforces permissions)
     function renderAdminControls() {
       renderServers(); renderChannels();
-      if (!isAdmin) closeAdminModal();
+      if (!isAdmin) { closeAdminModal(); closeAdminMenu(); }
     }
 
-    serverSettingsBtn.addEventListener('click', () => openAdminModal('password', currentServer));
+    // ---------- Admin options menu (⋯ in the channel panel header) ----------
+    function openAdminMenu() {
+      const server = findServer(currentServer);
+      const channel = server && server.channels.find(c => c.id === currentChannel);
+      menuRenameChannel.textContent = channel ? `Rename #${channel.name}` : 'Rename channel';
+      adminMenu.hidden = false;
+      serverSettingsBtn.setAttribute('aria-expanded', 'true');
+      menuEditServer.focus();
+    }
+    function closeAdminMenu() {
+      adminMenu.hidden = true;
+      serverSettingsBtn.setAttribute('aria-expanded', 'false');
+    }
+    serverSettingsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (adminMenu.hidden) openAdminMenu(); else closeAdminMenu();
+    });
+    menuEditServer.addEventListener('click', () => openAdminModal('edit'));
+    menuServerPassword.addEventListener('click', () => openAdminModal('password', currentServer));
+    menuRenameChannel.addEventListener('click', () => openAdminModal('channel'));
+    document.addEventListener('click', (e) => { if (!adminMenu.hidden && !adminMenu.contains(e.target)) closeAdminMenu(); });
+    adminMenu.addEventListener('keydown', (e) => {
+      const items = [...adminMenu.querySelectorAll('button')];
+      const i = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    });
+
     adminModalClose.addEventListener('click', closeAdminModal);
+    adminModal.querySelectorAll('[data-close-admin]').forEach(btn => btn.addEventListener('click', closeAdminModal));
     adminModal.addEventListener('click', (e) => { if (e.target === adminModal) closeAdminModal(); });
+
+    serverEditForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      serverEditError.textContent = '';
+      const name = editServerName.value.trim();
+      if (!name) { serverEditError.textContent = 'Enter a server name.'; return editServerName.focus(); }
+      const payload = { serverId: currentServer, name };
+      if (editSelectedIcon !== undefined && !editIconChoices.hidden) payload.icon = editSelectedIcon;
+      serverEditSubmit.disabled = true;
+      socket.emit('update server', payload, (res) => {
+        serverEditSubmit.disabled = false;
+        if (!res || !res.ok) { serverEditError.textContent = (res && res.error) || 'Could not save the server.'; return; }
+        closeAdminModal();
+        showToast('Server settings saved.');
+        refreshServers();
+      });
+    });
+
+    renameChannelSelect.addEventListener('change', () => { channelRenameError.textContent = ''; renderRenameChannelPanel(renameChannelSelect.value, true); });
+    channelRenameForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      channelRenameError.textContent = '';
+      const name = renameChannelName.value.trim();
+      if (!name) { channelRenameError.textContent = 'Enter a channel name.'; return renameChannelName.focus(); }
+      channelRenameSubmit.disabled = true;
+      socket.emit('rename channel', { serverId: currentServer, channelId: renameChannelSelect.value, name }, (res) => {
+        channelRenameSubmit.disabled = false;
+        if (!res || !res.ok) { channelRenameError.textContent = (res && res.error) || 'Could not rename the channel.'; return; }
+        closeAdminModal();
+        showToast(`Channel renamed to #${res.channel.name}.`);
+        refreshServers();
+      });
+    });
+
     passwordServerSelect.addEventListener('change', () => {
       serverPasswordError.textContent = ''; serverPasswordSuccess.textContent = '';
       renderPasswordPanel(passwordServerSelect.value);

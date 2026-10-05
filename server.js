@@ -260,11 +260,23 @@ function checkAdminCredentials(socket, username, password) {
   return 'Incorrect admin username or password.';
 }
 
-// ---------- Validation for admin-created servers ----------
-function sanitizeServerName(raw) {
-  if (typeof raw !== 'string') return null;
-  const name = raw.replace(/[\u0000-\u001F\u007F]/g, '').replace(/\s+/g, ' ').trim();
-  return name && name.length <= MAX_SERVER_NAME_LENGTH ? name : null;
+// ---------- Validation for admin-managed servers/channels ----------
+const MAX_CHANNEL_NAME_LENGTH = 32;
+
+// Display names: trimmed, inner whitespace collapsed, 1..max chars, control characters rejected (not stripped).
+// Returns { ok: true, name } or { ok: false, error }.
+function parseDisplayName(raw, label, max) {
+  if (typeof raw !== 'string') return { ok: false, error: `${label} name must be 1–${max} characters.` };
+  if (/[\u0000-\u001F\u007F]/.test(raw)) return { ok: false, error: `${label} name contains invalid characters.` };
+  const name = raw.replace(/\s+/g, ' ').trim();
+  if (!name || name.length > max) return { ok: false, error: `${label} name must be 1–${max} characters.` };
+  return { ok: true, name };
+}
+
+// Case-insensitive name clash with another server (the server being renamed is ignored)
+function serverNameTaken(name, exceptId) {
+  const lower = name.toLowerCase();
+  return Array.from(SERVERS).some(([id, s]) => id !== exceptId && s.name.toLowerCase() === lower);
 }
 
 // Short emoji/text icon; empty means the default icon
@@ -415,7 +427,9 @@ io.on('connection', (socket) => {
 
     const seq = ++joinSeq;
     const passcodeHash = SERVERS.get(serverId).passcodeHash;
-    if (passcodeHash === null) return enterServer(user, serverId, channelId, reply);
+    // Admins (verified by 'admin login'; user.isAdmin is never taken from the client) skip server passwords.
+    // Nothing about the password is sent back either way.
+    if (passcodeHash === null || user.isAdmin) return enterServer(user, serverId, channelId, reply);
 
     const ip = socket.handshake.address;
     const passcode = payload && typeof payload.passcode === 'string' ? payload.passcode : null;
@@ -557,12 +571,10 @@ io.on('connection', (socket) => {
     if (!requireAdmin(reply)) return;
     if (!payload || typeof payload !== 'object') return reply({ ok: false, error: 'Invalid request.' });
 
-    const name = sanitizeServerName(payload.name);
-    if (!name) return reply({ ok: false, error: `Server name must be 1–${MAX_SERVER_NAME_LENGTH} characters.` });
-    const lower = name.toLowerCase();
-    if (Array.from(SERVERS.values()).some((s) => s.name.toLowerCase() === lower)) {
-      return reply({ ok: false, error: 'A server with that name already exists.' });
-    }
+    const parsedName = parseDisplayName(payload.name, 'Server', MAX_SERVER_NAME_LENGTH);
+    if (!parsedName.ok) return reply({ ok: false, error: parsedName.error });
+    const name = parsedName.name;
+    if (serverNameTaken(name)) return reply({ ok: false, error: 'A server with that name already exists.' });
     const icon = sanitizeIcon(payload.icon);
     if (!icon) return reply({ ok: false, error: 'Icon must be a short emoji or text.' });
     const parsed = parseNewPasscode(payload.passcode);
@@ -626,6 +638,74 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Could not update server password:', err.message);
       reply({ ok: false, error: 'Could not update the password. Please try again.' });
+    }
+  });
+
+  // Payload: { serverId, name, icon? }. Changes the display name (and optionally the icon); the id never changes,
+  // so rooms, history and saved locations keep working.
+  socket.on('update server', async (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!requireAdmin(reply)) return;
+    if (!payload || typeof payload !== 'object') return reply({ ok: false, error: 'Invalid request.' });
+    const { serverId } = payload;
+    if (!isValidServerId(serverId)) return reply({ ok: false, error: 'That server does not exist.' });
+    const parsedName = parseDisplayName(payload.name, 'Server', MAX_SERVER_NAME_LENGTH);
+    if (!parsedName.ok) return reply({ ok: false, error: parsedName.error });
+    if (serverNameTaken(parsedName.name, serverId)) return reply({ ok: false, error: 'A server with that name already exists.' });
+    const server = SERVERS.get(serverId);
+    const icon = payload.icon === undefined ? server.icon : sanitizeIcon(payload.icon);
+    if (!icon) return reply({ ok: false, error: 'Icon must be a short emoji or text.' });
+
+    try {
+      await new Promise((resolve, reject) => {
+        db.run(`UPDATE servers SET name = ?, icon = ? WHERE id = ?`, [parsedName.name, icon, serverId], function (err) {
+          if (err) return reject(err);
+          if (this.changes !== 1) return reject(new Error('server row missing'));
+          resolve();
+        });
+      });
+      server.name = parsedName.name;
+      server.icon = icon;
+      console.log(`✏️ Server updated: ${serverId}`);
+      reply({ ok: true, server: publicServerList().find((s) => s.id === serverId) });
+      announceServersChanged();
+    } catch (err) {
+      console.error('Could not update server:', err.message);
+      reply({ ok: false, error: 'Could not update the server. Please try again.' });
+    }
+  });
+
+  // Payload: { serverId, channelId, name }. Changes the channel's display name only; channelId (and so the
+  // 'server:channel' room and its message history) stays the same.
+  socket.on('rename channel', async (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!requireAdmin(reply)) return;
+    if (!payload || typeof payload !== 'object') return reply({ ok: false, error: 'Invalid request.' });
+    const { serverId, channelId } = payload;
+    if (!isValidChannelId(serverId, channelId)) return reply({ ok: false, error: 'That channel does not exist.' });
+    const parsedName = parseDisplayName(payload.name, 'Channel', MAX_CHANNEL_NAME_LENGTH);
+    if (!parsedName.ok) return reply({ ok: false, error: parsedName.error });
+    const channels = SERVERS.get(serverId).channels;
+    const lower = parsedName.name.toLowerCase();
+    if (Array.from(channels.values()).some((c) => c.id !== channelId && c.name.toLowerCase() === lower)) {
+      return reply({ ok: false, error: 'A channel with that name already exists in this server.' });
+    }
+
+    try {
+      await new Promise((resolve, reject) => {
+        db.run(`UPDATE channels SET name = ? WHERE serverId = ? AND id = ?`, [parsedName.name, serverId, channelId], function (err) {
+          if (err) return reject(err);
+          if (this.changes !== 1) return reject(new Error('channel row missing'));
+          resolve();
+        });
+      });
+      channels.get(channelId).name = parsedName.name;
+      console.log(`✏️ Channel renamed: ${serverId}:${channelId}`);
+      reply({ ok: true, serverId, channel: { id: channelId, name: parsedName.name } });
+      announceServersChanged();
+    } catch (err) {
+      console.error('Could not rename channel:', err.message);
+      reply({ ok: false, error: 'Could not rename the channel. Please try again.' });
     }
   });
 
