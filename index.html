@@ -55,6 +55,9 @@
   .server-icon { font-size: 1.45em; line-height: 1; }
   .server-lock { position: absolute; right: -3px; bottom: -3px; width: 20px; height: 20px; border-radius: 50%; background: var(--bg-rail); font-size: 11px; display: flex; align-items: center; justify-content: center; }
   .rail-retry { width: 48px; height: 48px; border-radius: 50%; border: 1px dashed var(--danger); background: none; color: var(--danger); font-size: 1.3em; }
+  .add-server-btn { color: var(--accent); font-size: 1.6em; font-weight: 300; line-height: 1; }
+  .add-server-btn:hover { background: var(--accent-btn); color: #fff; }
+  .channel-header-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 
   .channel-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-panel); }
   .channel-panel-header { height: var(--header-h); padding: 0 8px 0 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--divider); flex-shrink: 0; }
@@ -150,10 +153,19 @@
   .avatar-hint { display: block; font-size: 0.75em; color: var(--faint); margin-top: 6px; }
   .modal-form { display: flex; flex-direction: column; gap: 6px; margin-top: 18px; text-align: left; }
   .field-label { font-size: 0.72em; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
-  .modal-form input { width: 100%; padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid transparent; background: var(--bg-input); color: var(--text); outline: none; }
-  .modal-form input:focus { border-color: var(--accent); }
+  .modal-form input, .modal-form select { width: 100%; padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid transparent; background: var(--bg-input); color: var(--text); outline: none; }
+  .modal-form input:focus, .modal-form select:focus { border-color: var(--accent); }
   .modal-form input:disabled { opacity: 0.6; }
   .form-error { min-height: 1.2em; font-size: 0.82em; color: var(--danger); }
+  .form-success { font-size: 0.82em; color: var(--online); }
+  .field-hint { font-size: 0.78em; color: var(--faint); }
+  .lock-status { font-size: 0.82em; color: var(--muted); padding: 2px 0; }
+  .icon-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+  .icon-choices button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid transparent; background: var(--bg-input); font-size: 1.2em; }
+  .icon-choices button.selected { border-color: var(--accent); background: var(--active); }
+  .btn-secondary { width: 100%; padding: 11px; border-radius: 8px; border: 1px solid var(--divider); background: none; color: var(--text); font-weight: 600; }
+  .btn-secondary:hover { background: var(--hover); }
+  .btn-secondary:disabled { opacity: 0.45; cursor: default; }
   .btn-primary { width: 100%; padding: 12px; border: none; border-radius: 8px; background: var(--accent-btn); color: #fff; font-weight: 650; margin-top: 4px; }
   .btn-primary:hover { background: var(--accent-btn-hover); }
   .btn-primary:disabled { opacity: 0.6; cursor: default; }
@@ -193,9 +205,14 @@
       <div class="channel-panel">
         <div class="channel-panel-header">
           <span class="channel-server-name" id="channel-server-name"></span>
-          <button type="button" id="close-sidebar-btn" class="icon-btn drawer-close" aria-label="Close menu">
-            <svg viewBox="0 0 24 24"><path d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4z"/></svg>
-          </button>
+          <div class="channel-header-actions">
+            <button type="button" id="server-settings-btn" class="icon-btn" title="Change server password" aria-label="Change server password" hidden>
+              <svg viewBox="0 0 24 24"><path d="M17 9V7A5 5 0 0 0 7 7v2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zM9 7a3 3 0 0 1 6 0v2H9V7zm4 9.73V18h-2v-1.27a2 2 0 1 1 2 0z"/></svg>
+            </button>
+            <button type="button" id="close-sidebar-btn" class="icon-btn drawer-close" aria-label="Close menu">
+              <svg viewBox="0 0 24 24"><path d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4z"/></svg>
+            </button>
+          </div>
         </div>
         <div class="channel-section-title">Text channels</div>
         <div class="channel-list" id="channel-list" aria-label="Channels"></div>
@@ -286,6 +303,49 @@
     </div>
   </div>
 
+  <!-- Admin-only dialogs. Hidden for guests; the backend still checks admin rights on every action. -->
+  <div class="modal-overlay edit-mode" id="admin-modal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <button type="button" id="admin-modal-close" class="icon-btn close-btn" aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4z"/></svg>
+      </button>
+
+      <section id="create-server-panel" hidden>
+        <div class="brand">Admin</div>
+        <h2>Add Server</h2>
+        <p>New servers start with a #general channel.</p>
+        <form id="create-server-form" class="modal-form" novalidate>
+          <label class="field-label" for="new-server-name">Server name</label>
+          <input id="new-server-name" maxlength="32" autocomplete="off" placeholder="e.g. Study Group" required />
+          <span class="field-label" id="icon-label">Icon</span>
+          <div class="icon-choices" id="icon-choices" role="radiogroup" aria-labelledby="icon-label"></div>
+          <label class="field-label" for="new-server-password">Password (optional)</label>
+          <input type="password" id="new-server-password" maxlength="64" autocomplete="new-password" />
+          <span class="field-hint">Leave empty for an open server anyone can join.</span>
+          <div class="form-error" id="create-server-error" role="alert"></div>
+          <button type="submit" class="btn-primary" id="create-server-submit">Create Server</button>
+        </form>
+      </section>
+
+      <section id="server-password-panel" hidden>
+        <div class="brand">Admin</div>
+        <h2>Server Password</h2>
+        <p>People already in the server stay connected. New joins need the new password.</p>
+        <form id="server-password-form" class="modal-form" novalidate>
+          <label class="field-label" for="password-server-select">Server</label>
+          <select id="password-server-select"></select>
+          <div class="lock-status" id="password-lock-status"></div>
+          <label class="field-label" for="server-new-password">New password</label>
+          <input type="password" id="server-new-password" maxlength="64" autocomplete="new-password" />
+          <div class="form-error" id="server-password-error" role="alert"></div>
+          <div class="form-success" id="server-password-success" role="status"></div>
+          <button type="submit" class="btn-primary" id="server-password-submit">Change Password</button>
+          <button type="button" class="btn-secondary" id="server-password-remove">Remove Password</button>
+        </form>
+      </section>
+    </div>
+  </div>
+
   <div id="toast" role="status"></div>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -336,6 +396,26 @@
     const adminPassword = document.getElementById('admin-password');
     const adminSubmit = document.getElementById('admin-submit');
     const adminError = document.getElementById('admin-error');
+
+    const serverSettingsBtn = document.getElementById('server-settings-btn');
+    const adminModal = document.getElementById('admin-modal');
+    const adminModalClose = document.getElementById('admin-modal-close');
+    const createServerPanel = document.getElementById('create-server-panel');
+    const createServerForm = document.getElementById('create-server-form');
+    const newServerName = document.getElementById('new-server-name');
+    const newServerPassword = document.getElementById('new-server-password');
+    const iconChoices = document.getElementById('icon-choices');
+    const createServerError = document.getElementById('create-server-error');
+    const createServerSubmit = document.getElementById('create-server-submit');
+    const serverPasswordPanel = document.getElementById('server-password-panel');
+    const serverPasswordForm = document.getElementById('server-password-form');
+    const passwordServerSelect = document.getElementById('password-server-select');
+    const passwordLockStatus = document.getElementById('password-lock-status');
+    const serverNewPassword = document.getElementById('server-new-password');
+    const serverPasswordError = document.getElementById('server-password-error');
+    const serverPasswordSuccess = document.getElementById('server-password-success');
+    const serverPasswordSubmit = document.getElementById('server-password-submit');
+    const serverPasswordRemove = document.getElementById('server-password-remove');
 
     const toast = document.getElementById('toast');
     const emojiBtn = document.getElementById('emoji-btn');
@@ -465,7 +545,8 @@
     closeModalBtn.addEventListener('click', () => { if (displayName) closeEntry(); });
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
-      if (usernameModal.classList.contains('visible') && displayName) closeEntry();
+      if (adminModal.classList.contains('visible')) closeAdminModal();
+      else if (usernameModal.classList.contains('visible') && displayName) closeEntry();
       else closeSidebar();
     });
 
@@ -509,6 +590,7 @@
       if (!isAdmin) { username = displayName; localStorage.setItem(NAME_KEY, displayName); }
       if (userAvatar) localStorage.setItem(AVATAR_KEY, userAvatar);
       renderMe();
+      renderAdminControls();
       closeEntry();
       input.focus();
       loggedIn = true;
@@ -565,12 +647,24 @@
         btn.addEventListener('click', () => switchServer(s.id));
         serverList.appendChild(btn);
       });
+      if (isAdmin) {
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.id = 'add-server-btn';
+        addBtn.className = 'server-item add-server-btn';
+        addBtn.title = 'Add Server';
+        addBtn.setAttribute('aria-label', 'Add Server');
+        addBtn.textContent = '+';
+        addBtn.addEventListener('click', () => openAdminModal('create'));
+        serverList.appendChild(addBtn);
+      }
     }
 
     function renderChannels() {
       channelList.innerHTML = '';
       const server = findServer(currentServer);
       channelServerName.textContent = server ? server.name : (serversState === 'error' ? 'DIT Chat' : 'Loading…');
+      serverSettingsBtn.hidden = !(isAdmin && server);
       if (!server) {
         channelList.appendChild(sidebarStatus(serversState === 'error' ? 'Unable to load servers.' : (serversState === 'ready' ? 'Loading channels…' : 'Loading servers…'), serversState === 'error'));
         return;
@@ -612,6 +706,21 @@
         });
     }
 
+    // Re-fetch metadata after an admin change (new server, lock added/removed) without moving the user
+    function refreshServers() {
+      if (serversState !== 'ready') return Promise.resolve();
+      return fetch('/api/servers')
+        .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(list => {
+          if (!Array.isArray(list) || !list.length) return;
+          servers = list;
+          renderServers(); renderChannels();
+          if (adminModal.classList.contains('visible') && !serverPasswordPanel.hidden) renderPasswordPanel();
+        })
+        .catch(() => {}); // keep the current list; the next refresh or reconnect will retry
+    }
+    socket.on('servers updated', refreshServers);
+
     // Navigation requests run one at a time: a join is finished once its history has arrived,
     // so a slow response can never overwrite a newer selection. The latest click while busy is queued.
     let navBusy = false; let queuedNav = null; let awaitingHistory = false;
@@ -636,7 +745,7 @@
     // The backend validates server, channel and passcode; the UI only moves once it agrees
     function sendJoin(event, payload, done) {
       socket.emit(event, payload, (res) => {
-        if (!res || !res.ok) { finishNav(); return done(false, (res && res.error) || 'Akses ditolak!'); }
+        if (!res || !res.ok) { finishNav(); return done(false, (res && res.error) || 'Access denied.'); }
         applyLocation(res.serverId, res.channelId);
         awaitingHistory = true;
         done(true);
@@ -652,12 +761,12 @@
 
     function canNavigate() {
       if (!socket.connected) { showToast('Reconnecting…'); return false; }
-      if (!loggedIn) { showToast('Sila masukkan nama untuk mula.'); return false; }
+      if (!loggedIn) { showToast('Please enter a name to start.'); return false; }
       return true;
     }
 
     function askPasscode(server) {
-      return prompt(`Pelayan ${server.name} dikunci.\nSila masukkan kod laluan:`);
+      return prompt(`${server.name} is locked.\nEnter the server password:`);
     }
 
     function switchServer(serverId) {
@@ -667,7 +776,7 @@
       let passcode = null;
       if (activeServer.isLocked) {
         passcode = askPasscode(activeServer);
-        if (passcode === null) return showToast("Kod laluan salah atau dibatalkan. Akses ditolak!");
+        if (passcode === null) return showToast('Cancelled. This server needs a password.');
       }
       // Server switches land on the backend default channel ('general'); the drawer stays open to pick a channel
       joinServer(serverId, passcode, undefined, (ok, error) => { if (!ok) showToast(error); });
@@ -714,6 +823,125 @@
       });
     }
 
+    // ==========================================
+    // Admin: add server + change server password (the backend re-checks admin rights on every request)
+    // ==========================================
+    const SERVER_ICONS = ['💬', '🎮', '📚', '💻', '🎵', '⚽', '🎨', '🧪', '🍔', '🌙', '🔥', '⭐'];
+    let selectedIcon = SERVER_ICONS[0];
+
+    function renderIconChoices() {
+      iconChoices.innerHTML = '';
+      SERVER_ICONS.forEach(icon => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = icon;
+        btn.className = icon === selectedIcon ? 'selected' : '';
+        btn.setAttribute('role', 'radio');
+        btn.setAttribute('aria-checked', String(icon === selectedIcon));
+        btn.setAttribute('aria-label', 'Icon ' + icon);
+        btn.addEventListener('click', () => { selectedIcon = icon; renderIconChoices(); });
+        iconChoices.appendChild(btn);
+      });
+    }
+
+    function renderPasswordPanel(selectId) {
+      const keep = selectId || passwordServerSelect.value || currentServer;
+      passwordServerSelect.innerHTML = '';
+      servers.forEach(s => {
+        const option = document.createElement('option');
+        option.value = s.id;
+        option.textContent = `${s.icon} ${s.name}${s.isLocked ? ' 🔒' : ''}`;
+        passwordServerSelect.appendChild(option);
+      });
+      if (findServer(keep)) passwordServerSelect.value = keep;
+      const server = findServer(passwordServerSelect.value);
+      passwordLockStatus.textContent = server && server.isLocked
+        ? '🔒 Locked: a password is required to join.'
+        : '🔓 Open: anyone can join.';
+      serverPasswordRemove.disabled = !(server && server.isLocked);
+    }
+
+    function openAdminModal(panel, serverId) {
+      if (!isAdmin) return;
+      closeSidebar();
+      createServerPanel.hidden = panel !== 'create';
+      serverPasswordPanel.hidden = panel !== 'password';
+      createServerError.textContent = ''; serverPasswordError.textContent = ''; serverPasswordSuccess.textContent = '';
+      if (panel === 'create') {
+        createServerForm.reset(); selectedIcon = SERVER_ICONS[0]; renderIconChoices();
+        adminModal.setAttribute('aria-label', 'Add Server');
+      } else {
+        serverNewPassword.value = '';
+        renderPasswordPanel(serverId);
+        adminModal.setAttribute('aria-label', 'Server Password');
+      }
+      adminModal.classList.add('visible');
+      (panel === 'create' ? newServerName : serverNewPassword).focus();
+    }
+
+    function closeAdminModal() { adminModal.classList.remove('visible'); }
+
+    // Show/hide admin-only controls for the current session (cosmetic: the backend enforces permissions)
+    function renderAdminControls() {
+      renderServers(); renderChannels();
+      if (!isAdmin) closeAdminModal();
+    }
+
+    serverSettingsBtn.addEventListener('click', () => openAdminModal('password', currentServer));
+    adminModalClose.addEventListener('click', closeAdminModal);
+    adminModal.addEventListener('click', (e) => { if (e.target === adminModal) closeAdminModal(); });
+    passwordServerSelect.addEventListener('change', () => {
+      serverPasswordError.textContent = ''; serverPasswordSuccess.textContent = '';
+      renderPasswordPanel(passwordServerSelect.value);
+    });
+
+    createServerForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      createServerError.textContent = '';
+      const name = newServerName.value.trim();
+      const passcode = newServerPassword.value;
+      if (!name) { createServerError.textContent = 'Enter a server name.'; return newServerName.focus(); }
+      createServerSubmit.disabled = true;
+      socket.emit('create server', { name, icon: selectedIcon, passcode }, (res) => {
+        createServerSubmit.disabled = false;
+        if (!res || !res.ok) { createServerError.textContent = (res && res.error) || 'Could not create the server.'; return; }
+        closeAdminModal();
+        showToast(`Server "${res.server.name}" created.`);
+        // Load the new metadata, then take the admin straight into the new server
+        refreshServers().then(() => {
+          if (findServer(res.server.id)) joinServer(res.server.id, passcode || null, undefined, (ok, error) => { if (!ok) showToast(error); });
+        });
+      });
+    });
+
+    function submitServerPassword(passcode) {
+      serverPasswordError.textContent = ''; serverPasswordSuccess.textContent = '';
+      const serverId = passwordServerSelect.value;
+      serverPasswordSubmit.disabled = true; serverPasswordRemove.disabled = true;
+      socket.emit('set server passcode', { serverId, passcode }, (res) => {
+        serverPasswordSubmit.disabled = false;
+        if (!res || !res.ok) {
+          serverPasswordError.textContent = (res && res.error) || 'Could not update the password.';
+          return renderPasswordPanel(serverId);
+        }
+        // Keep this session able to rejoin after a reconnect
+        if (passcode) enteredPasscodes.set(serverId, passcode); else enteredPasscodes.delete(serverId);
+        serverNewPassword.value = '';
+        serverPasswordSuccess.textContent = passcode ? 'Password updated.' : 'Password removed. The server is now open.';
+        refreshServers();
+      });
+    }
+
+    serverPasswordForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!serverNewPassword.value) { serverPasswordError.textContent = 'Enter a new password, or use Remove Password.'; return serverNewPassword.focus(); }
+      submitServerPassword(serverNewPassword.value);
+    });
+    serverPasswordRemove.addEventListener('click', () => {
+      const server = findServer(passwordServerSelect.value);
+      if (server && confirm(`Remove the password from ${server.name}? Anyone will be able to join.`)) submitServerPassword(null);
+    });
+
     function openSidebar() { serverSidebar.classList.add('open'); sidebarOverlay.classList.add('visible'); }
     function closeSidebar() { serverSidebar.classList.remove('open'); sidebarOverlay.classList.remove('visible'); }
     navHome.addEventListener('click', openSidebar);
@@ -730,7 +958,7 @@
         socket.emit('admin login', { ...adminCreds, avatar: userAvatar }, (res) => {
           if (res && res.ok) return;
           // Admin access could not be restored: continue as the saved guest
-          adminCreds = null; isAdmin = false; renderMe();
+          adminCreds = null; isAdmin = false; renderMe(); renderAdminControls();
           showToast((res && res.error) || 'Admin session ended.');
           if (username) socket.emit('set username', { name: username, avatar: userAvatar });
           else { displayName = ''; openEntry('welcome'); }
@@ -802,10 +1030,10 @@
           deleteBtn.type = 'button';
           deleteBtn.className = 'delete-btn';
           deleteBtn.textContent = '🗑️';
-          deleteBtn.title = 'Padam mesej ini (Untuk Semua)';
+          deleteBtn.title = 'Delete message for everyone';
           deleteBtn.setAttribute('aria-label', deleteBtn.title);
           deleteBtn.onclick = () => {
-            if (confirm('Padam mesej ini untuk semua orang?')) socket.emit('delete message', data.id);
+            if (confirm('Delete this message for everyone?')) socket.emit('delete message', data.id);
           };
           li.appendChild(deleteBtn);
         }
@@ -821,7 +1049,7 @@
       const next = msgEl.nextElementSibling;
       msgEl.className = 'system-message';
       delete msgEl.dataset.user;
-      msgEl.textContent = '🚫 Mesej ini telah dipadam oleh Admin';
+      msgEl.textContent = '🚫 This message was deleted by an admin.';
       // The following message lost its group header, so show its own avatar/name again
       if (next && next.classList.contains('grouped')) next.classList.remove('grouped');
     });
