@@ -124,11 +124,18 @@ function migrateDatabase(done) {
         `);
         SEED_SERVERS.forEach((s, serverIndex) => {
           db.run(`INSERT OR IGNORE INTO servers (id, name, icon, passcodeHash, position) VALUES (?, ?, ?, ?, ?)`,
-            [s.id, s.name, s.icon, s.passcodeHash, serverIndex]);
-          s.channels.forEach((channelId, channelIndex) => {
-            db.run(`INSERT OR IGNORE INTO channels (serverId, id, name, position) VALUES (?, ?, ?, ?)`,
-              [s.id, channelId, channelId, channelIndex]);
-          });
+            [s.id, s.name, s.icon, s.passcodeHash, serverIndex],
+            function (err) {
+              // Only seed this server's starter channels the moment its row is first created
+              // (this.changes === 1). On every later startup the server row already exists (INSERT OR
+              // IGNORE no-ops, changes === 0), so its channels are intentionally left alone -- otherwise
+              // an admin-deleted seed channel would silently reappear the next time the process restarts.
+              if (err || this.changes === 0) return;
+              s.channels.forEach((channelId, channelIndex) => {
+                db.run(`INSERT OR IGNORE INTO channels (serverId, id, name, position) VALUES (?, ?, ?, ?)`,
+                  [s.id, channelId, channelId, channelIndex]);
+              });
+            });
         });
         db.run(`SELECT 1`, done); // runs after everything queued above
       });
@@ -245,17 +252,50 @@ function createFailureLimiter(maxFailures) {
   };
 }
 
-const adminLimiter = createFailureLimiter(5);
+// Admin login uses capped exponential backoff instead of the flat lockout above: a sustained brute-force
+// attempt is still meaningfully slowed (failure 6 already costs an 8s wait), but a legitimate admin who
+// mistyped their password a few times is never locked out for minutes -- every wait is bounded at
+// ADMIN_LOGIN_MAX_DELAY_MS. A long-idle IP (no failures for a while) starts fresh rather than the map
+// growing forever on a long-running process.
+const ADMIN_LOGIN_BASE_DELAY_MS = 500;
+const ADMIN_LOGIN_MAX_DELAY_MS = 10000;
+const ADMIN_LOGIN_IDLE_RESET_MS = 15 * 60 * 1000;
+
+function createAdminLoginLimiter() {
+  const state = new Map(); // ip -> { failures, blockedUntil, lastFailureAt }
+  return {
+    // ms still left to wait before another attempt is allowed, or 0 if one is allowed right now.
+    msUntilAllowed(ip) {
+      const s = state.get(ip);
+      if (!s) return 0;
+      if (Date.now() - s.lastFailureAt > ADMIN_LOGIN_IDLE_RESET_MS) { state.delete(ip); return 0; }
+      return Math.max(0, s.blockedUntil - Date.now());
+    },
+    fail(ip) {
+      const s = state.get(ip) || { failures: 0, blockedUntil: 0, lastFailureAt: 0 };
+      s.failures += 1;
+      s.lastFailureAt = Date.now();
+      const delay = Math.min(ADMIN_LOGIN_BASE_DELAY_MS * 2 ** (s.failures - 1), ADMIN_LOGIN_MAX_DELAY_MS);
+      s.blockedUntil = Date.now() + delay;
+      state.set(ip, s);
+    },
+    reset(ip) { state.delete(ip); },
+  };
+}
+
+const adminLimiter = createAdminLoginLimiter();
 const passcodeLimiter = createFailureLimiter(10);
 
 function isAdminName(name) {
   return name.toLowerCase() === ADMIN_USERNAME.toLowerCase();
 }
 
-// Returns null when the credentials are valid, otherwise an error message. Failed attempts are throttled per IP.
+// Returns null when the credentials are valid, otherwise an error message. Failed attempts are throttled
+// per IP with a capped backoff (never more than ADMIN_LOGIN_MAX_DELAY_MS between attempts).
 function checkAdminCredentials(socket, username, password) {
   const ip = socket.handshake.address;
-  if (adminLimiter.isBlocked(ip)) return TOO_MANY_ATTEMPTS;
+  const waitMs = adminLimiter.msUntilAllowed(ip);
+  if (waitMs > 0) return `Too many attempts. Please wait ${Math.ceil(waitMs / 1000)}s and try again.`;
   if (isAdminName(username) && password === ADMIN_PASSWORD) {
     adminLimiter.reset(ip);
     return null;
@@ -746,6 +786,69 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('Could not rename channel:', err.message);
       reply({ ok: false, error: 'Could not rename the channel. Please try again.' });
+    }
+  });
+
+  // Payload: { serverId, channelId }. Deletes the channel and its messages; a server must always keep
+  // at least one channel. Ack gets { ok: true, serverId, channelId } or { ok: false, error }.
+  socket.on('delete channel', async (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const adminUser = requireAdmin(reply, 'delete channel');
+    if (!adminUser) return;
+    if (!payload || typeof payload !== 'object') return reply({ ok: false, error: 'Invalid request.' });
+    const { serverId, channelId } = payload;
+    if (!isValidChannelId(serverId, channelId)) return reply({ ok: false, error: 'That channel does not exist.' });
+    const server = SERVERS.get(serverId);
+    if (server.channels.size <= 1) {
+      return reply({ ok: false, error: 'You cannot delete the last channel in this server. Create another channel before deleting this one.' });
+    }
+    // Any channel other than the one being deleted; Maps preserve insertion order (loaded by position).
+    const fallbackChannelId = Array.from(server.channels.keys()).find((id) => id !== channelId);
+
+    console.log(`[ADMIN] delete channel: socket=${socket.id} user=${JSON.stringify(adminUser.username)} serverId=${serverId} channelId=${channelId} fallback=${fallbackChannelId}`);
+    try {
+      // Sequential statements rather than BEGIN/COMMIT: the sqlite3 connection is shared across every
+      // socket, so a transaction here could swallow other sockets' unrelated writes (same reasoning as
+      // 'create server'). Messages are deleted first so a failure on the channel-row delete can never
+      // strand messages under a dead channelId that a future same-id channel could accidentally inherit;
+      // if that second step does fail, the channel just ends up empty and the admin can retry.
+      const run = (sql, params) => new Promise((resolve, reject) => {
+        db.run(sql, params, function (err) { if (err) return reject(err); resolve(this); });
+      });
+      await run(`DELETE FROM messages WHERE serverId = ? AND channelId = ?`, [serverId, channelId]);
+      const result = await run(`DELETE FROM channels WHERE serverId = ? AND id = ?`, [serverId, channelId]);
+      if (result.changes !== 1) throw new Error('channel row missing');
+
+      server.channels.delete(channelId);
+
+      // Move any socket currently viewing the deleted channel to the fallback channel server-side --
+      // this can't be left for the client to notice on its own, or 'chat message' would keep accepting
+      // posts into a channelId that no longer exists in the registry.
+      const affectedSocketIds = [];
+      for (const [socketId, user] of connectedUsers) {
+        if (user.currentServer !== serverId || user.currentChannel !== channelId) continue;
+        const targetSocket = io.sockets.sockets.get(socketId);
+        if (!targetSocket) continue;
+        targetSocket.leave(getChannelRoom(serverId, channelId));
+        targetSocket.join(getChannelRoom(serverId, fallbackChannelId));
+        user.currentChannel = fallbackChannelId;
+        affectedSocketIds.push(socketId);
+      }
+
+      // Broadcast before sending the affected sockets their new history, so their client-side
+      // currentChannel is already updated by the time 'load history' arrives for the fallback channel.
+      io.to(serverId).emit('channel deleted', { serverId, channelId, fallbackChannelId });
+      for (const socketId of affectedSocketIds) {
+        const targetSocket = io.sockets.sockets.get(socketId);
+        if (targetSocket) sendChannelHistory(targetSocket, serverId, fallbackChannelId);
+      }
+
+      console.log(`🗑️ Channel deleted: ${serverId}:${channelId}`);
+      reply({ ok: true, serverId, channelId });
+      announceServersChanged();
+    } catch (err) {
+      console.error('Could not delete channel:', err.message);
+      reply({ ok: false, error: 'Could not delete the channel. Please try again.' });
     }
   });
 

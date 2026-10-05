@@ -231,6 +231,9 @@
   .btn-primary:hover { background: var(--accent-hover); }
   .btn-primary:active { background: var(--accent-press); }
   .btn-primary:disabled { opacity: 0.6; cursor: default; }
+  .btn-danger { background: var(--danger); }
+  .btn-danger:hover { background: #ff6259; }
+  .btn-danger:disabled { opacity: 0.5; cursor: default; }
   .btn-secondary { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: none; color: var(--text); font-weight: 500; transition: background 0.12s; }
   .btn-secondary:hover { background: var(--hover); }
   .btn-secondary:disabled { opacity: 0.45; cursor: default; }
@@ -293,6 +296,7 @@
             <button type="button" role="menuitem" id="menu-server-password">Change password</button>
             <div class="admin-menu-label">Channel</div>
             <button type="button" role="menuitem" id="menu-rename-channel">Rename channel</button>
+            <button type="button" role="menuitem" id="menu-delete-channel">Delete channel</button>
           </div>
         </div>
         <div class="channel-section-title">Text channels</div>
@@ -482,6 +486,21 @@
           </div>
         </form>
       </section>
+
+      <section id="channel-delete-panel" hidden>
+        <div class="brand">Admin</div>
+        <h2>Delete Channel</h2>
+        <form id="channel-delete-form" class="modal-form" novalidate>
+          <label class="field-label" for="delete-channel-select">Channel</label>
+          <select id="delete-channel-select"></select>
+          <p class="field-hint" id="channel-delete-warning"></p>
+          <div class="form-error" id="channel-delete-error" role="alert"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" data-close-admin>Cancel</button>
+            <button type="submit" class="btn-primary btn-danger" id="channel-delete-submit">Delete Channel</button>
+          </div>
+        </form>
+      </section>
     </div>
   </div>
 
@@ -592,6 +611,7 @@
     const menuEditServer = document.getElementById('menu-edit-server');
     const menuServerPassword = document.getElementById('menu-server-password');
     const menuRenameChannel = document.getElementById('menu-rename-channel');
+    const menuDeleteChannel = document.getElementById('menu-delete-channel');
     const serverEditPanel = document.getElementById('server-edit-panel');
     const serverEditForm = document.getElementById('server-edit-form');
     const editServerName = document.getElementById('edit-server-name');
@@ -607,6 +627,12 @@
     const renameChannelName = document.getElementById('rename-channel-name');
     const channelRenameError = document.getElementById('channel-rename-error');
     const channelRenameSubmit = document.getElementById('channel-rename-submit');
+    const channelDeletePanel = document.getElementById('channel-delete-panel');
+    const channelDeleteForm = document.getElementById('channel-delete-form');
+    const deleteChannelSelect = document.getElementById('delete-channel-select');
+    const channelDeleteWarning = document.getElementById('channel-delete-warning');
+    const channelDeleteError = document.getElementById('channel-delete-error');
+    const channelDeleteSubmit = document.getElementById('channel-delete-submit');
 
     const toast = document.getElementById('toast');
     const emojiBtn = document.getElementById('emoji-btn');
@@ -991,10 +1017,23 @@
           }
           if (adminModal.classList.contains('visible') && !serverPasswordPanel.hidden) renderPasswordPanel();
           if (adminModal.classList.contains('visible') && !channelRenamePanel.hidden) renderRenameChannelPanel();
+          if (adminModal.classList.contains('visible') && !channelDeletePanel.hidden) renderChannelDeletePanel();
         })
         .catch(() => {}); // keep the current list; the next refresh or reconnect will retry
     }
     socket.on('servers updated', refreshServers);
+
+    // An admin deleted a channel. If this socket was viewing it, the backend already moved its room
+    // membership to `fallbackChannelId` and is about to send 'load history' for it -- update local state
+    // to match *before* that history arrives so it renders under the right channel. Every client in the
+    // server (not just the one navigated away) gets this event so its channel list drops the entry too.
+    socket.on('channel deleted', (data) => {
+      if (!data || typeof data !== 'object') return;
+      if (data.serverId === currentServer && data.channelId === currentChannel) {
+        applyLocation(data.serverId, data.fallbackChannelId);
+      }
+      refreshServers();
+    });
 
     // Navigation requests run one at a time: a join is finished once its history has arrived,
     // so a slow response can never overwrite a newer selection. The latest click while busy is queued.
@@ -1186,14 +1225,37 @@
       if (resetName && channel) renameChannelName.value = channel.name;
     }
 
-    const ADMIN_PANELS = { create: createServerPanel, password: serverPasswordPanel, edit: serverEditPanel, channel: channelRenamePanel };
-    const ADMIN_PANEL_TITLES = { create: 'Add Server', password: 'Server Password', edit: 'Server Settings', channel: 'Rename Channel' };
+    // Channels of the current server for the delete picker; keeps the chosen channel across live refreshes.
+    function renderChannelDeletePanel(selectId) {
+      const server = findServer(currentServer);
+      const keep = selectId || deleteChannelSelect.value || currentChannel;
+      deleteChannelSelect.innerHTML = '';
+      (server ? server.channels : []).forEach(c => {
+        const option = document.createElement('option');
+        option.value = c.id; option.textContent = '#' + c.name;
+        deleteChannelSelect.appendChild(option);
+      });
+      if (server && server.channels.some(c => c.id === keep)) deleteChannelSelect.value = keep;
+      updateChannelDeleteWarning();
+    }
+    function updateChannelDeleteWarning() {
+      const server = findServer(currentServer);
+      const isLast = !!(server && server.channels.length <= 1);
+      const channel = server && server.channels.find(c => c.id === deleteChannelSelect.value);
+      channelDeleteWarning.textContent = isLast
+        ? 'This server only has one channel. Create another channel before deleting this one.'
+        : (channel ? `This will permanently delete #${channel.name} and all messages in it.` : '');
+      channelDeleteSubmit.disabled = isLast;
+    }
+
+    const ADMIN_PANELS = { create: createServerPanel, password: serverPasswordPanel, edit: serverEditPanel, channel: channelRenamePanel, channelDelete: channelDeletePanel };
+    const ADMIN_PANEL_TITLES = { create: 'Add Server', password: 'Server Password', edit: 'Server Settings', channel: 'Rename Channel', channelDelete: 'Delete Channel' };
 
     function openAdminModal(panel, serverId) {
       if (!isAdmin) return;
       closeSidebar(); closeAdminMenu();
       Object.entries(ADMIN_PANELS).forEach(([key, el]) => { el.hidden = key !== panel; });
-      [createServerError, serverPasswordError, serverPasswordSuccess, serverEditError, channelRenameError].forEach(el => { el.textContent = ''; });
+      [createServerError, serverPasswordError, serverPasswordSuccess, serverEditError, channelRenameError, channelDeleteError].forEach(el => { el.textContent = ''; });
       let focusEl;
       if (panel === 'create') {
         createServerForm.reset(); selectedIcon = SERVER_ICONS[0]; renderIconChoices();
@@ -1215,6 +1277,9 @@
       } else if (panel === 'channel') {
         renderRenameChannelPanel(currentChannel, true);
         focusEl = renameChannelName;
+      } else if (panel === 'channelDelete') {
+        renderChannelDeletePanel(currentChannel);
+        focusEl = deleteChannelSelect;
       }
       adminModal.setAttribute('aria-label', ADMIN_PANEL_TITLES[panel]);
       adminModal.classList.add('visible');
@@ -1250,6 +1315,7 @@
     menuEditServer.addEventListener('click', () => openAdminModal('edit'));
     menuServerPassword.addEventListener('click', () => openAdminModal('password', currentServer));
     menuRenameChannel.addEventListener('click', () => openAdminModal('channel'));
+    menuDeleteChannel.addEventListener('click', () => openAdminModal('channelDelete'));
     document.addEventListener('click', (e) => { if (!adminMenu.hidden && !adminMenu.contains(e.target)) closeAdminMenu(); });
     adminMenu.addEventListener('keydown', (e) => {
       const items = [...adminMenu.querySelectorAll('button')];
@@ -1295,6 +1361,27 @@
         closeAdminModal();
         showToast(`Channel renamed to #${res.channel.name}.`);
         refreshServers();
+      });
+    });
+
+    deleteChannelSelect.addEventListener('change', () => { channelDeleteError.textContent = ''; updateChannelDeleteWarning(); });
+    channelDeleteForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      channelDeleteError.textContent = '';
+      if (!canAdminAct(channelDeleteError)) return;
+      const channelId = deleteChannelSelect.value;
+      const server = findServer(currentServer);
+      const channelName = (server && server.channels.find(c => c.id === channelId)?.name) || channelId;
+      channelDeleteSubmit.disabled = true;
+      emitAdmin('delete channel', { serverId: currentServer, channelId }, (res) => {
+        channelDeleteSubmit.disabled = false;
+        if (!res || !res.ok) { channelDeleteError.textContent = (res && res.error) || 'Could not delete the channel.'; return; }
+        closeAdminModal();
+        showToast(`#${channelName} deleted.`);
+        refreshServers();
+        // If this socket wasn't the one moved server-side (e.g. the admin deleted a channel they
+        // weren't currently viewing), nothing else to do -- the 'channel deleted' broadcast (received
+        // just like any other client) already handles the case where they were.
       });
     });
 
