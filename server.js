@@ -16,14 +16,12 @@ const RATE_LIMIT_WINDOW_MS = 3000;
 const RATE_LIMIT_MAX_MESSAGES = 5;
 
 // ==========================================
-// DATABASE SETUP (FASA 2 - Tambah serverId)
+// DATABASE SETUP 
 // ==========================================
 const db = new sqlite3.Database('./chat.db', (err) => {
   if (err) console.error('🔴 Failed to open database:', err.message);
   else {
     console.log('📁 SQLite Database (chat.db) connected successfully.');
-    
-    // Cipta jadual dengan lajur baharu serverId
     db.run(`
       CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,8 +32,6 @@ const db = new sqlite3.Database('./chat.db', (err) => {
         serverId TEXT DEFAULT 'dit-lounge'
       )
     `, (err) => {
-      // Baris ini secara automatik menambah lajur serverId ke pangkalan data lama awak
-      // tanpa memadamkan mesej-mesej Lobi Utama yang sedia ada.
       if (!err) {
         db.run(`ALTER TABLE messages ADD COLUMN serverId TEXT DEFAULT 'dit-lounge'`, () => {});
       }
@@ -58,7 +54,6 @@ function broadcastUserList() {
   io.emit('user list', usernames);
 }
 
-// Anti-Spam System
 function isRateLimited(user) {
   const now = Date.now();
   user.messageTimestamps = user.messageTimestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
@@ -70,49 +65,61 @@ function isRateLimited(user) {
 io.on('connection', (socket) => {
   console.log(`🟢 Socket connected: ${socket.id}`);
 
+  // ==========================================
+  // FASA 3A: PENGESAHAN ADMIN
+  // ==========================================
   socket.on('set username', (data) => {
     if (!data) return;
 
     const rawUsername = typeof data === 'string' ? data : data.name;
     if (typeof rawUsername !== 'string') return; 
 
-    const username = rawUsername.trim().slice(0, MAX_USERNAME_LENGTH);
+    let username = rawUsername.trim().slice(0, MAX_USERNAME_LENGTH);
     if (!username || username === '[object Object]' || username === 'null') return; 
+
+    let isAdmin = false;
+
+    // Semak jika seseorang cuba menjadi Mueez (Admin)
+    if (username.toLowerCase() === 'mueez') {
+      if (data.password === '333333') {
+        isAdmin = true;
+        username = 'Mueez'; // Pastikan ejaan tepat
+      } else {
+        // Jika salah kata laluan, tolak permintaan
+        socket.emit('login error', 'Kata laluan salah untuk akaun Admin (Mueez).');
+        return;
+      }
+    }
 
     let avatar = null;
     if (data.avatar && typeof data.avatar === 'string' && data.avatar.length < 150000) {
       avatar = data.avatar;
     }
 
-    connectedUsers.set(socket.id, { username, avatar, messageTimestamps: [], currentServer: 'dit-lounge' });
+    connectedUsers.set(socket.id, { username, avatar, isAdmin, messageTimestamps: [], currentServer: 'dit-lounge' });
     broadcastUserList();
+    
+    // Beritahu frontend bahawa log masuk berjaya
+    socket.emit('login success');
   });
 
-  // ==========================================
-  // FASA 2: LOGIK PERTUKARAN PELAYAN (ROOMS)
-  // ==========================================
   socket.on('join server', (serverId) => {
     const user = connectedUsers.get(socket.id);
     if (!user) return;
 
-    // Keluar dari semua bilik lain terlebih dahulu (kecuali ID sendiri)
     socket.rooms.forEach(room => {
       if (room !== socket.id) socket.leave(room);
     });
 
-    // Masuk ke bilik pelayan yang dipilih
     socket.join(serverId);
     user.currentServer = serverId;
 
-    // Ambil sejarah mesej HANYA untuk bilik ini
+    // Tambah 'id' dalam SELECT supaya frontend tahu ID mesej untuk dipadam
     db.all(
-      `SELECT user, avatar, text, time FROM messages WHERE serverId = ? ORDER BY id DESC LIMIT ?`,
+      `SELECT id, user, avatar, text, time FROM messages WHERE serverId = ? ORDER BY id DESC LIMIT ?`,
       [serverId, MAX_HISTORY],
       (err, rows) => {
-        if (err) {
-          console.error('Database read error:', err);
-          return;
-        }
+        if (err) return console.error('Database read error:', err);
         const history = rows.reverse();
         socket.emit('load history', history);
       }
@@ -131,7 +138,6 @@ io.on('connection', (socket) => {
     const text = String((data && data.text) || '').trim().slice(0, MAX_MESSAGE_LENGTH);
     if (!text) return;
 
-    // Guna ID pelayan yang dihantar, jika tiada, guna pelayan semasa pengguna
     const serverId = data.serverId || user.currentServer || 'dit-lounge';
 
     const messageData = { 
@@ -141,22 +147,37 @@ io.on('connection', (socket) => {
       time: timestamp() 
     };
     
-    // SIMPAN MESEJ BERSAMA ID PELAYAN (SERVER ID)
+    // SIMPAN MESEJ & HANTAR BERSAMA ID BARU
     db.run(
       `INSERT INTO messages (user, avatar, text, time, serverId) VALUES (?, ?, ?, ?, ?)`,
       [messageData.user, messageData.avatar, messageData.text, messageData.time, serverId],
       function(err) {
-        if (err) console.error('Error saving message:', err.message);
+        if (err) return console.error('Error saving message:', err.message);
+        
+        messageData.id = this.lastID; // Ambil ID dari SQLite
+        io.to(serverId).emit('chat message', messageData);
       }
     );
 
     db.run(`DELETE FROM messages WHERE id NOT IN (SELECT id FROM messages ORDER BY id DESC LIMIT 100)`);
-
-    // Pancarkan mesej ini HANYA kepada pengguna di dalam bilik yang sama
-    io.to(serverId).emit('chat message', messageData);
   });
 
-  // Pastikan isyarat 'menaip' tidak menembusi ke pelayan lain
+  // ==========================================
+  // FASA 3A: LOGIK PADAM MESEJ (DELETE FOR EVERYONE)
+  // ==========================================
+  socket.on('delete message', (msgId) => {
+    const user = connectedUsers.get(socket.id);
+    // Hanya proses jika pengguna ini adalah Admin
+    if (user && user.isAdmin) {
+      db.run(`DELETE FROM messages WHERE id = ?`, [msgId], (err) => {
+        if (!err) {
+          // Pancarkan arahan buang mesej ke SEMUA bilik
+          io.emit('message deleted', msgId);
+        }
+      });
+    }
+  });
+
   socket.on('typing', () => {
     const user = connectedUsers.get(socket.id);
     if (user && user.username && user.currentServer) {
