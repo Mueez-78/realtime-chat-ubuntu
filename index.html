@@ -858,6 +858,10 @@
 
     function findServer(serverId) { return servers.find(s => s.id === serverId); }
     function defaultServer() { return servers.find(s => !s.isLocked) || servers[0]; }
+    // A server is still locked *for this guest* only if it has a password AND this session hasn't
+    // already proven it knows that password (admins never face the lock at all). Purely cosmetic --
+    // the backend re-verifies the password on every 'join server' regardless of what the UI shows.
+    function isLockedForMe(server) { return server.isLocked && !isAdmin && !enteredPasscodes.has(server.id); }
 
     function sidebarStatus(text, withRetry) {
       const div = document.createElement('div');
@@ -883,15 +887,16 @@
         return;
       }
       servers.forEach(s => {
+        const lockedForMe = isLockedForMe(s);
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = `server-item ${s.id === currentServer ? 'active' : ''}`;
-        btn.title = s.name + (s.isLocked ? ' 🔒' : '');
-        btn.setAttribute('aria-label', s.name + (s.isLocked ? ' (locked)' : ''));
+        btn.title = s.name + (lockedForMe ? ' 🔒' : '');
+        btn.setAttribute('aria-label', s.name + (lockedForMe ? ' (locked)' : ''));
         if (s.id === currentServer) btn.setAttribute('aria-current', 'true');
         const icon = document.createElement('span'); icon.className = 'server-icon'; fillServerIcon(icon, s);
         btn.appendChild(icon);
-        if (s.isLocked) {
+        if (lockedForMe) {
           const lock = document.createElement('span'); lock.className = 'server-lock'; lock.setAttribute('aria-hidden', 'true');
           lock.innerHTML = LOCK_ICON; // static markup
           btn.appendChild(lock);
@@ -940,7 +945,7 @@
     function setHeader(server, channel) {
       headerTitle.textContent = '';
       headerServer.textContent = server ? server.name : '';
-      headerAccess.textContent = server ? (server.isLocked ? 'Locked server' : 'Public server') : '';
+      headerAccess.textContent = server ? (isLockedForMe(server) ? 'Locked server' : 'Public server') : '';
       if (!channel) { headerTitle.textContent = server ? server.name : 'DIT Chat'; return; }
       const hash = document.createElement('span'); hash.className = 'hdr-hash'; hash.textContent = '#';
       headerTitle.append(hash, document.createTextNode(channel.name));
@@ -1011,10 +1016,23 @@
       clearTimeout(typingTimeout); typingUsers.clear(); renderTypingIndicator();
     }
 
-    // The backend validates server, channel and passcode; the UI only moves once it agrees
+    // The backend validates server, channel and passcode; the UI only moves once it agrees.
+    // For 'join server', the passcode (if any) must be recorded/cleared in `enteredPasscodes` BEFORE
+    // applyLocation() runs -- applyLocation calls renderServers()/setHeader(), which read
+    // isLockedForMe() off that same map, so recording it any later would render one stale "still
+    // locked" frame right after a successful unlock.
     function sendJoin(event, payload, done) {
       socket.emit(event, payload, (res) => {
-        if (!res || !res.ok) { finishNav(); return done(false, (res && res.error) || 'Access denied.'); }
+        const isServerJoin = event === 'join server';
+        if (!res || !res.ok) {
+          finishNav();
+          // A remembered passcode the backend just rejected (e.g. an admin changed the password after
+          // this guest unlocked it) must not be retried silently forever -- drop it so the next attempt
+          // re-prompts and the rail's lock indicator reappears.
+          if (isServerJoin && payload.passcode) enteredPasscodes.delete(payload.serverId);
+          return done(false, (res && res.error) || 'Access denied.');
+        }
+        if (isServerJoin && payload.passcode) enteredPasscodes.set(payload.serverId, payload.passcode);
         applyLocation(res.serverId, res.channelId);
         awaitingHistory = true;
         done(true);
@@ -1022,10 +1040,7 @@
     }
 
     function joinServer(serverId, passcode, channelId, done) {
-      runNav(() => sendJoin('join server', { serverId, passcode, channelId }, (ok, error) => {
-        if (ok && passcode !== null) enteredPasscodes.set(serverId, passcode);
-        done(ok, error);
-      }));
+      runNav(() => sendJoin('join server', { serverId, passcode, channelId }, done));
     }
 
     function canNavigate() {
@@ -1043,9 +1058,11 @@
       if (!canNavigate()) return;
       const activeServer = findServer(serverId);
       let passcode = null;
-      // Admins are let in by the backend without a password; guests are asked for it
+      // Admins are let in by the backend without a password. A guest who already unlocked this server
+      // earlier in the session (its passcode is remembered in `enteredPasscodes`, memory only, never
+      // localStorage) reuses it silently -- only a server this session has never unlocked prompts.
       if (activeServer.isLocked && !isAdmin) {
-        passcode = askPasscode(activeServer);
+        passcode = enteredPasscodes.get(serverId) ?? askPasscode(activeServer);
         if (passcode === null) return showToast('Cancelled. This server needs a password.');
       }
       // Server switches land on the backend default channel ('general'); the drawer stays open to pick a channel
@@ -1502,7 +1519,11 @@
           deleteBtn.title = 'Delete message for everyone';
           deleteBtn.setAttribute('aria-label', deleteBtn.title);
           deleteBtn.onclick = () => {
-            if (confirm('Delete this message for everyone?')) socket.emit('delete message', data.id);
+            if (!confirm('Delete this message for everyone?')) return;
+            // The 'message deleted' broadcast is what actually removes it from the UI (including for
+            // the admin who clicked); this ack exists only so a rejected/failed delete is reported
+            // instead of the button silently doing nothing.
+            emitAdmin('delete message', data.id, (res) => { if (res && res.ok === false) showToast(res.error || 'Could not delete the message.'); });
           };
           li.appendChild(deleteBtn);
         }
