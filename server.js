@@ -112,7 +112,8 @@ function sendChannelHistory(socket, serverId, channelId) {
     [serverId, channelId, MAX_HISTORY],
     (err, rows) => {
       if (err) return console.error('Database read error:', err);
-      socket.emit('load history', rows.reverse());
+      // The admin name is reserved, so it alone identifies admin messages (lets the UI badge them without knowing the name)
+      socket.emit('load history', rows.reverse().map((row) => ({ ...row, isAdmin: row.user === ADMIN_USERNAME })));
     }
   );
 }
@@ -122,6 +123,41 @@ function sanitizeUsername(raw) {
   const username = raw.replace(/[\u0000-\u001F\u007F]/g, '').trim().slice(0, MAX_USERNAME_LENGTH);
   if (!username || username === '[object Object]' || username === 'null') return null;
   return username;
+}
+
+function sanitizeAvatar(raw) {
+  return typeof raw === 'string' && raw.length < MAX_AVATAR_LENGTH && AVATAR_PATTERN.test(raw) ? raw : null;
+}
+
+// ==========================================
+// ADMIN (credentials never leave the backend; admin status lives only on the socket)
+// ==========================================
+const ADMIN_USERNAME = 'Mueez';
+const ADMIN_PASSWORD = '333333';
+const ADMIN_MAX_FAILURES = 5;
+const ADMIN_LOCKOUT_MS = 10 * 60 * 1000;
+const adminFailures = new Map(); // ip -> timestamps of recent failed attempts
+
+function isAdminName(name) {
+  return name.toLowerCase() === ADMIN_USERNAME.toLowerCase();
+}
+
+// Returns null when the credentials are valid, otherwise an error message. Failed attempts are throttled per IP.
+function checkAdminCredentials(socket, username, password) {
+  const ip = socket.handshake.address;
+  const now = Date.now();
+  const recent = (adminFailures.get(ip) || []).filter((t) => now - t < ADMIN_LOCKOUT_MS);
+  if (recent.length >= ADMIN_MAX_FAILURES) {
+    adminFailures.set(ip, recent);
+    return 'Terlalu banyak cubaan. Cuba lagi kemudian.';
+  }
+  if (isAdminName(username) && password === ADMIN_PASSWORD) {
+    adminFailures.delete(ip);
+    return null;
+  }
+  recent.push(now);
+  adminFailures.set(ip, recent);
+  return 'Nama pengguna atau kata laluan Admin salah.';
 }
 
 // Send the online list of one server only to the sockets in that server
@@ -148,6 +184,7 @@ io.on('connection', (socket) => {
   // ==========================================
   // FASA 3A: PENGESAHAN ADMIN
   // ==========================================
+  // Guest identity. The admin name is reserved: it only passes with valid admin credentials.
   socket.on('set username', (data) => {
     if (!data || (typeof data !== 'string' && typeof data !== 'object')) return;
 
@@ -158,22 +195,36 @@ io.on('connection', (socket) => {
     let isAdmin = false;
 
     // Semak jika seseorang cuba menjadi Mueez (Admin)
-    if (username.toLowerCase() === 'mueez') {
-      if (password === '333333') {
-        isAdmin = true;
-        username = 'Mueez'; // Pastikan ejaan tepat
-      } else {
-        // Jika salah kata laluan, tolak permintaan
-        socket.emit('login error', 'Kata laluan salah untuk akaun Admin (Mueez).');
+    if (isAdminName(username)) {
+      // Older clients sent the admin password along with the name; the new UI uses 'admin login'
+      const error = password ? checkAdminCredentials(socket, username, password) : 'Nama ini dikhaskan untuk Admin.';
+      if (error) {
+        socket.emit('login error', error);
         return;
       }
+      isAdmin = true;
+      username = ADMIN_USERNAME; // Pastikan ejaan tepat
     }
 
-    let avatar = null;
-    if (typeof data.avatar === 'string' && data.avatar.length < MAX_AVATAR_LENGTH && AVATAR_PATTERN.test(data.avatar)) {
-      avatar = data.avatar;
-    }
+    registerUser(username, sanitizeAvatar(data.avatar), isAdmin);
+  });
 
+  // Admin sign-in from the entry screen. Payload: { username, password, avatar? }; ack gets { ok, username } or { ok: false, error }.
+  // Admin status lives only on this socket; nothing is stored client-side.
+  socket.on('admin login', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (!payload || typeof payload !== 'object') return reply({ ok: false, error: 'Permintaan tidak sah.' });
+
+    const username = sanitizeUsername(payload.username) || '';
+    const password = typeof payload.password === 'string' ? payload.password : '';
+    const error = checkAdminCredentials(socket, username, password);
+    if (error) return reply({ ok: false, error });
+
+    reply({ ok: true, username: ADMIN_USERNAME });
+    registerUser(ADMIN_USERNAME, sanitizeAvatar(payload.avatar), true);
+  });
+
+  function registerUser(username, avatar, isAdmin) {
     const existing = connectedUsers.get(socket.id);
     if (existing) {
       // Profile change on the same connection: keep the joined server and rate-limit state
@@ -187,9 +238,9 @@ io.on('connection', (socket) => {
       connectedUsers.set(socket.id, { username, avatar, isAdmin, messageTimestamps: [], currentServer: null, currentChannel: null });
     }
 
-    // Beritahu frontend bahawa log masuk berjaya
-    socket.emit('login success');
-  });
+    // Beritahu frontend bahawa log masuk berjaya (with the confirmed identity)
+    socket.emit('login success', { username, isAdmin });
+  }
 
   // Leave the current channel room, clearing any typing indicator this user left behind there
   function leaveCurrentChannel(user) {
@@ -276,8 +327,9 @@ io.on('connection', (socket) => {
     const channelId = user.currentChannel;
 
     const messageData = {
-      user: user.username, 
+      user: user.username,
       avatar: user.avatar,
+      isAdmin: user.isAdmin,
       text, 
       time: timestamp() 
     };
