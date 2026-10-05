@@ -490,7 +490,32 @@
   <script src="/socket.io/socket.io.js"></script>
   <script>
   (function () {
+    // Bump this string whenever the frontend changes meaningfully. Printed on load so a stale cached
+    // copy (browser cache or an intermediate proxy) can be spotted from the browser console instead of
+    // guessed at -- check this against the value in the deployed index.html source.
+    const APP_BUILD = 'phase7-2026-10-05';
+    console.log('[DIT Chat] build', APP_BUILD);
+
     const socket = io();
+    const ADMIN_ACK_TIMEOUT_MS = 10000;
+    // Every admin action that expects a response wraps socket.emit in this so a dropped/delayed ack
+    // (flaky real-world network, e.g. a Pi behind a proxy) always resolves to a visible error within a
+    // bounded time instead of leaving the UI looking like the click did nothing.
+    function emitAdmin(event, payload, cb) {
+      socket.timeout(ADMIN_ACK_TIMEOUT_MS).emit(event, payload, (err, res) => {
+        if (err) { cb({ ok: false, error: 'Request timed out. Check your connection and try again.' }); return; }
+        cb(res);
+      });
+    }
+    // Admin dialogs must not fire into a socket that is offline or mid-reconnect: the packet can be
+    // queued and replayed out of order against the server's own reconnect re-auth, producing a confusing
+    // "Admin access required" error even though the user is still logged in. Block it up front instead.
+    function canAdminAct(errorEl) {
+      if (socket.connected && loggedIn) return true;
+      const msg = 'Reconnecting… please wait a moment and try again.';
+      if (errorEl) errorEl.textContent = msg; else showToast(msg);
+      return false;
+    }
 
     const messagesEl = document.getElementById('messages');
     const form = document.getElementById('form');
@@ -590,23 +615,33 @@
     const MAX_LEN = 500;
     const MAX_NAME_LEN = 24;
     // ---------- Server icons: one monochrome line-icon family (24×24, stroke = currentColor) ----------
+    // One coherent family: chamfered/angular corners instead of literal object silhouettes, so every mark
+    // reads as a product icon rather than an emoji stand-in. Same 24x24 grid, same stroke, same weight.
     const LINE_ICONS = {
-      // DIT Lounge mark: a geometric "D"; the lower-left corner steps down into a small chat-bubble tail
-      monogram: '<path d="M8 18.5v-13h3.5a6.5 6.5 0 0 1 0 13h-1.6L8 20.3z"/>',
+      // DIT Lounge mark: an angular, chamfered "D" (straight chamfers, not a round letterform) with a
+      // short diagonal tail -- a brand mark first, a letter second.
+      monogram: '<path d="M7 5v14h5l3-3v-8l-3-3z"/><path d="M7 19l-2 2.5"/>',
       chat: '<path d="M5.5 7a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2h-5.5l-5.5 3.8z"/>',
       hash: '<path d="M10 5 8.5 19M15.5 5 14 19M6 9.5h13M5 14.5h13"/>',
-      gamepad: '<path d="M7 7h10a4 4 0 0 1 4 4v3.5a2.5 2.5 0 0 1-4.5 1.5L15 14H9l-1.5 2A2.5 2.5 0 0 1 3 14.5V11a4 4 0 0 1 4-4z"/><path d="M8 9.8v3M6.5 11.3h3M15.5 11.3h.01"/>',
-      book: '<path d="M5 17V6.5a2 2 0 0 1 2-2h12v12H7a2 2 0 0 0 0 4h12v-4"/><path d="M9.5 8.5h5"/>',
-      code: '<path d="M9 7.5 4.5 12 9 16.5M15 7.5l4.5 4.5-4.5 4.5"/>',
-      megaphone: '<path d="M4.5 9.5v5h3L16 19V5L7.5 9.5z"/><path d="M7.5 14.5l1.2 4.5"/>',
+      // Gaming: an analog stick reduced to a ring with an off-center filled nub -- reads as "control"
+      // without colliding with the plus-in-square language used by the Add Server button.
+      gamepad: '<circle cx="12" cy="12" r="7"/><circle cx="14" cy="9.8" r="2" fill="currentColor" stroke="none"/>',
+      // Study: two offset, flat document cards (a "notes" stack), not an open-book silhouette.
+      book: '<rect x="5.5" y="7" width="10" height="12" rx="1.5"/><rect x="8.5" y="5" width="10" height="12" rx="1.5"/>',
+      code: '<path d="M9.5 8 5.5 12l4 4M14.5 8l4 4-4 4"/>',
+      // Announcement: a flat-sided signal cone with two radiating arcs, not a megaphone-with-handle.
+      megaphone: '<path d="M5 15V9l6-2.5v11z"/><path d="M13.5 9.8a3 3 0 0 1 0 4.4M16.5 7.8a6 6 0 0 1 0 8.4"/>',
       music: '<path d="M10 16.5V6.5l8.5-2v10"/><circle cx="7.75" cy="16.5" r="2.25"/><circle cx="16.25" cy="14.5" r="2.25"/>',
-      trophy: '<path d="M8 5h8v4.5a4 4 0 0 1-8 0z"/><path d="M8 7H5.5a2.5 2.5 0 0 0 2.6 3M16 7h2.5a2.5 2.5 0 0 1-2.6 3M12 13.5V17M9 19.5h6"/>',
-      palette: '<path d="M12 4.5a7.5 7.5 0 1 0 0 15c1 0 1.5-.8 1.1-1.7-.4-1 .2-2 1.3-2H16a3.5 3.5 0 0 0 3.5-3.5c0-4.4-3.4-7.8-7.5-7.8z"/><path d="M8.5 11h.01M11 7.8h.01M15 8.8h.01"/>',
-      flask: '<path d="M10 5h4M11 5v5l-4.5 7.5A1.6 1.6 0 0 0 7.9 20h8.2a1.6 1.6 0 0 0 1.4-2.5L13 10V5"/>',
+      // Trophy -> achievement mark: a plain medal disc with a V ribbon, not a trophy cup with handles.
+      trophy: '<circle cx="12" cy="9.5" r="4.5"/><path d="M9 13.5 7.5 19.5 12 17l4.5 2.5-1.5-6"/>',
+      // Palette -> three color dots of different sizes, loosely scattered, instead of a palette-with-thumbhole.
+      palette: '<circle cx="8" cy="16" r="2"/><circle cx="13.5" cy="7.5" r="2.5"/><circle cx="17" cy="14" r="1.5"/>',
+      flask: '<path d="M10.5 5h3M11 5v4.5l-4.1 7.3A1.4 1.4 0 0 0 8.1 19h7.8a1.4 1.4 0 0 0 1.2-2.2L13 9.5V5"/>',
       cup: '<path d="M6 9h10v4.5a4.5 4.5 0 0 1-4.5 4.5h-1A4.5 4.5 0 0 1 6 13.5z"/><path d="M16 10.5h1a2.5 2.5 0 0 1 0 5h-1"/>',
       moon: '<path d="M18.5 14.5A7 7 0 0 1 9.5 5.5a7 7 0 1 0 9 9z"/>',
       flame: '<path d="M12 19.5a5.5 5.5 0 0 0 5.5-5.5c0-3.5-2.5-5.5-3.5-8.5-2 2-4 4.5-4 6.5a1.8 1.8 0 0 1-2-2C7 11.5 6.5 12.8 6.5 14a5.5 5.5 0 0 0 5.5 5.5z"/>',
-      star: '<path d="m12 5 2.1 4.4 4.8.6-3.5 3.3.9 4.7L12 15.7 7.7 18l.9-4.7L5.1 10l4.8-.6z"/>',
+      // Star -> a 4-point sparkle/diamond (two kite curves), reading as an abstract accent, not a rating star.
+      star: '<path d="M12 4.5c.5 3 2 4.8 5 5.5-3 .7-4.5 2.5-5 5.5-.5-3-2-4.8-5-5.5 3-.7 4.5-2.5 5-5.5z"/>',
       plus: '<path d="M12 6v12M6 12h12"/>',
       lock: '<rect x="5.5" y="11" width="13" height="9" rx="2"/><path d="M8.5 11V8.5a3.5 3.5 0 0 1 7 0V11"/>',
     };
@@ -765,7 +800,8 @@
       entryError.textContent = '';
       if (isAdmin) {
         // Admin profile change (avatar only): re-confirm with the in-memory credentials
-        return socket.emit('admin login', { ...adminCreds, avatar: userAvatar }, (res) => {
+        if (!canAdminAct(entryError)) return;
+        return emitAdmin('admin login', { ...adminCreds, avatar: userAvatar }, (res) => {
           if (!res || !res.ok) entryError.textContent = (res && res.error) || 'Unable to save.';
         });
       }
@@ -779,8 +815,10 @@
       adminError.textContent = '';
       const creds = { username: adminUsername.value.trim(), password: adminPassword.value };
       if (!creds.username || !creds.password) { adminError.textContent = 'Enter the admin username and password.'; return; }
+      // This IS the login action, so canAdminAct()'s loggedIn check doesn't apply here -- only connectivity does.
+      if (!socket.connected) { adminError.textContent = 'Not connected. Please wait a moment and try again.'; return; }
       adminSubmit.disabled = true;
-      socket.emit('admin login', { ...creds, avatar: userAvatar }, (res) => {
+      emitAdmin('admin login', { ...creds, avatar: userAvatar }, (res) => {
         adminSubmit.disabled = false;
         adminPassword.value = '';
         if (!res || !res.ok) { adminError.textContent = (res && res.error) || 'Login failed.'; return; }
@@ -1149,7 +1187,7 @@
         focusEl = serverNewPassword;
       } else if (panel === 'edit') {
         const server = findServer(currentServer);
-        if (!server) return;
+        if (!server) { showToast('No server selected. Please try again.'); return; }
         editServerName.value = server.name;
         // Servers with a fixed mark (DIT Lounge) don't use the icon setting
         const fixedMark = !!SERVER_ICON_BY_ID[server.id];
@@ -1212,10 +1250,11 @@
       serverEditError.textContent = '';
       const name = editServerName.value.trim();
       if (!name) { serverEditError.textContent = 'Enter a server name.'; return editServerName.focus(); }
+      if (!canAdminAct(serverEditError)) return;
       const payload = { serverId: currentServer, name };
       if (editSelectedIcon !== undefined && !editIconChoices.hidden) payload.icon = editSelectedIcon;
       serverEditSubmit.disabled = true;
-      socket.emit('update server', payload, (res) => {
+      emitAdmin('update server', payload, (res) => {
         serverEditSubmit.disabled = false;
         if (!res || !res.ok) { serverEditError.textContent = (res && res.error) || 'Could not save the server.'; return; }
         closeAdminModal();
@@ -1231,8 +1270,9 @@
       channelRenameError.textContent = '';
       const name = renameChannelName.value.trim();
       if (!name) { channelRenameError.textContent = 'Enter a channel name.'; return renameChannelName.focus(); }
+      if (!canAdminAct(channelRenameError)) return;
       channelRenameSubmit.disabled = true;
-      socket.emit('rename channel', { serverId: currentServer, channelId: renameChannelSelect.value, name }, (res) => {
+      emitAdmin('rename channel', { serverId: currentServer, channelId: renameChannelSelect.value, name }, (res) => {
         channelRenameSubmit.disabled = false;
         if (!res || !res.ok) { channelRenameError.textContent = (res && res.error) || 'Could not rename the channel.'; return; }
         closeAdminModal();
@@ -1252,8 +1292,9 @@
       const name = newServerName.value.trim();
       const passcode = newServerPassword.value;
       if (!name) { createServerError.textContent = 'Enter a server name.'; return newServerName.focus(); }
+      if (!canAdminAct(createServerError)) return;
       createServerSubmit.disabled = true;
-      socket.emit('create server', { name, icon: selectedIcon, passcode }, (res) => {
+      emitAdmin('create server', { name, icon: selectedIcon, passcode }, (res) => {
         createServerSubmit.disabled = false;
         if (!res || !res.ok) { createServerError.textContent = (res && res.error) || 'Could not create the server.'; return; }
         closeAdminModal();
@@ -1267,9 +1308,10 @@
 
     function submitServerPassword(passcode) {
       serverPasswordError.textContent = ''; serverPasswordSuccess.textContent = '';
+      if (!canAdminAct(serverPasswordError)) return;
       const serverId = passwordServerSelect.value;
       serverPasswordSubmit.disabled = true; serverPasswordRemove.disabled = true;
-      socket.emit('set server passcode', { serverId, passcode }, (res) => {
+      emitAdmin('set server passcode', { serverId, passcode }, (res) => {
         serverPasswordSubmit.disabled = false;
         if (!res || !res.ok) {
           serverPasswordError.textContent = (res && res.error) || 'Could not update the password.';
@@ -1306,11 +1348,15 @@
       statusDot.className = 'dot online';
       statusText.textContent = lastKnownUserCount ? `${lastKnownUserCount} online` : 'Online';
       if (adminCreds) {
-        socket.emit('admin login', { ...adminCreds, avatar: userAvatar }, (res) => {
+        // While this is in flight, `loggedIn` stays false (set on 'disconnect', only restored by the
+        // 'login success' this triggers), so canAdminAct() correctly blocks any admin dialog submit
+        // attempted in this window instead of racing it against an unauthenticated new socket.
+        emitAdmin('admin login', { ...adminCreds, avatar: userAvatar }, (res) => {
           if (res && res.ok) return;
-          // Admin access could not be restored: continue as the saved guest
+          // Admin access could not be restored (wrong creds, or the re-auth itself timed out):
+          // don't leave the UI stuck showing a stale Admin badge that can't actually do anything.
           adminCreds = null; isAdmin = false; renderMe(); renderAdminControls();
-          showToast((res && res.error) || 'Admin session ended.');
+          showToast(res.error || 'Admin session ended.');
           if (username) socket.emit('set username', { name: username, avatar: userAvatar });
           else { displayName = ''; openEntry('welcome'); }
         });

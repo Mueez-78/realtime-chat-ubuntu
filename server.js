@@ -169,6 +169,10 @@ function publicServerList() {
 const connectedUsers = new Map(); 
 
 app.get('/', (req, res) => {
+  // The frontend is a single static file with no build step or versioned asset URLs, so a stale cached
+  // copy (browser cache, or an intermediate proxy/CDN such as Cloudflare) would silently serve old code
+  // while the backend is up to date. Force revalidation on every load so that can never happen.
+  res.set('Cache-Control', 'no-store');
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
@@ -376,8 +380,13 @@ io.on('connection', (socket) => {
     const username = sanitizeUsername(payload.username) || '';
     const password = typeof payload.password === 'string' ? payload.password : '';
     const error = checkAdminCredentials(socket, username, password);
-    if (error) return reply({ ok: false, error });
+    if (error) {
+      // Never log the attempted password.
+      console.log(`[ADMIN] login rejected: socket=${socket.id} ip=${socket.handshake.address} reason=${JSON.stringify(error)}`);
+      return reply({ ok: false, error });
+    }
 
+    console.log(`[ADMIN] login accepted: socket=${socket.id} ip=${socket.handshake.address}`);
     reply({ ok: true, username: ADMIN_USERNAME });
     registerUser(ADMIN_USERNAME, sanitizeAvatar(payload.avatar), true);
   });
@@ -535,21 +544,34 @@ io.on('connection', (socket) => {
   // ==========================================
   // ADMIN: DELETE MESSAGE (for everyone)
   // ==========================================
-  socket.on('delete message', (msgId) => {
+  // `ack` is optional and new (older clients that don't pass one are unaffected); it exists so a failed
+  // delete is diagnosable instead of silently doing nothing from the admin's point of view.
+  socket.on('delete message', (msgId, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
     const user = connectedUsers.get(socket.id);
     // Admins only (server-side flag set by a verified admin login)
-    if (!user || !user.isAdmin) return;
-    if (!Number.isSafeInteger(msgId) || msgId <= 0) return;
+    if (!user || !user.isAdmin) {
+      console.log(`[ADMIN] delete message rejected: socket=${socket.id} user=${user ? JSON.stringify(user.username) : '(none)'} isAdmin=${user ? user.isAdmin : false}`);
+      return reply({ ok: false, error: user ? 'Admin access required.' : 'Session not ready yet. Please wait a moment and try again.' });
+    }
+    if (!Number.isSafeInteger(msgId) || msgId <= 0) return reply({ ok: false, error: 'Invalid message.' });
 
     db.get(`SELECT serverId, channelId FROM messages WHERE id = ?`, [msgId], (err, row) => {
-      if (err || !row) return;
+      if (err) { console.error('delete message: lookup failed:', err.message); return reply({ ok: false, error: 'Could not delete the message. Please try again.' }); }
+      if (!row) return reply({ ok: false, error: 'That message no longer exists.' });
       // Admin can only delete messages in the server + channel they are currently in
-      if (row.serverId !== user.currentServer || row.channelId !== user.currentChannel) return;
+      if (row.serverId !== user.currentServer || row.channelId !== user.currentChannel) {
+        console.log(`[ADMIN] delete message rejected: socket=${socket.id} user=${JSON.stringify(user.username)} msgId=${msgId} reason="message is in ${row.serverId}:${row.channelId}, admin is in ${user.currentServer}:${user.currentChannel}"`);
+        return reply({ ok: false, error: 'That message is not in your current channel.' });
+      }
 
+      console.log(`[ADMIN] delete message: socket=${socket.id} user=${JSON.stringify(user.username)} msgId=${msgId} serverId=${row.serverId} channelId=${row.channelId}`);
       db.run(`DELETE FROM messages WHERE id = ?`, [msgId], function (err) {
-        if (err || this.changes === 0) return;
+        if (err) { console.error('delete message: delete failed:', err.message); return reply({ ok: false, error: 'Could not delete the message. Please try again.' }); }
+        if (this.changes === 0) return reply({ ok: false, error: 'That message no longer exists.' });
         // Only clients in that message's channel are told to remove it
         io.to(getChannelRoom(row.serverId, row.channelId)).emit('message deleted', msgId);
+        reply({ ok: true });
       });
     });
   });
@@ -557,10 +579,19 @@ io.on('connection', (socket) => {
   // ==========================================
   // ADMIN: SERVER MANAGEMENT
   // ==========================================
-  function requireAdmin(reply) {
+  // `label` is only used for diagnostics (never sent to the client). Distinguishing "this socket was
+  // never registered" from "registered but not an admin" matters: the former happens right after a
+  // reconnect, before the client's re-auth 'admin login' has landed, and looks to the user like a
+  // logged-in admin action silently failing unless the error says so explicitly.
+  function requireAdmin(reply, label) {
     const user = connectedUsers.get(socket.id);
     if (user && user.isAdmin) return user;
-    reply({ ok: false, error: 'Admin access required.' });
+    const notYetRegistered = !user;
+    console.log(`[ADMIN] ${label} rejected: socket=${socket.id} user=${user ? JSON.stringify(user.username) : '(none)'} isAdmin=${user ? user.isAdmin : false} reason=${notYetRegistered ? 'socket not signed in yet (reconnect in progress?)' : 'not an admin'}`);
+    reply({
+      ok: false,
+      error: notYetRegistered ? 'Session not ready yet. Please wait a moment and try again.' : 'Admin access required.',
+    });
     return null;
   }
 
@@ -568,7 +599,8 @@ io.on('connection', (socket) => {
   // Ack gets { ok: true, server: <public metadata> } or { ok: false, error }.
   socket.on('create server', async (payload, ack) => {
     const reply = typeof ack === 'function' ? ack : () => {};
-    if (!requireAdmin(reply)) return;
+    const adminUser = requireAdmin(reply, 'create server');
+    if (!adminUser) return;
     if (!payload || typeof payload !== 'object') return reply({ ok: false, error: 'Invalid request.' });
 
     const parsedName = parseDisplayName(payload.name, 'Server', MAX_SERVER_NAME_LENGTH);
@@ -584,6 +616,7 @@ io.on('connection', (socket) => {
     const id = generateServerId(name);
     if (!SERVER_ID_PATTERN.test(id)) return reply({ ok: false, error: 'Could not create a valid server id.' });
     pendingServerIds.add(id);
+    console.log(`[ADMIN] create server: socket=${socket.id} user=${JSON.stringify(adminUser.username)} id=${id} name=${JSON.stringify(name)} locked=${parsed.passcode !== null}`);
     try {
       const passcodeHash = parsed.passcode === null ? null : await hashPasscode(parsed.passcode);
       const position = Math.max(-1, ...Array.from(SERVERS.values(), (s) => s.position)) + 1;
@@ -613,13 +646,16 @@ io.on('connection', (socket) => {
   // Members already inside stay connected; only new joins need the new password.
   socket.on('set server passcode', async (payload, ack) => {
     const reply = typeof ack === 'function' ? ack : () => {};
-    if (!requireAdmin(reply)) return;
+    const adminUser = requireAdmin(reply, 'set server passcode');
+    if (!adminUser) return;
     if (!payload || typeof payload !== 'object') return reply({ ok: false, error: 'Invalid request.' });
     const { serverId } = payload;
     if (!isValidServerId(serverId)) return reply({ ok: false, error: 'That server does not exist.' });
     const parsed = parseNewPasscode(payload.passcode);
     if (!parsed.ok) return reply({ ok: false, error: parsed.error });
 
+    // Never log the passcode itself -- only that a change was requested, and which direction.
+    console.log(`[ADMIN] set server passcode: socket=${socket.id} user=${JSON.stringify(adminUser.username)} serverId=${serverId} action=${parsed.passcode === null ? 'remove' : 'set'}`);
     try {
       const passcodeHash = parsed.passcode === null ? null : await hashPasscode(parsed.passcode);
       await new Promise((resolve, reject) => {
@@ -645,7 +681,8 @@ io.on('connection', (socket) => {
   // so rooms, history and saved locations keep working.
   socket.on('update server', async (payload, ack) => {
     const reply = typeof ack === 'function' ? ack : () => {};
-    if (!requireAdmin(reply)) return;
+    const adminUser = requireAdmin(reply, 'update server');
+    if (!adminUser) return;
     if (!payload || typeof payload !== 'object') return reply({ ok: false, error: 'Invalid request.' });
     const { serverId } = payload;
     if (!isValidServerId(serverId)) return reply({ ok: false, error: 'That server does not exist.' });
@@ -656,6 +693,7 @@ io.on('connection', (socket) => {
     const icon = payload.icon === undefined ? server.icon : sanitizeIcon(payload.icon);
     if (!icon) return reply({ ok: false, error: 'Icon must be a short emoji or text.' });
 
+    console.log(`[ADMIN] update server: socket=${socket.id} user=${JSON.stringify(adminUser.username)} serverId=${serverId} requestedName=${JSON.stringify(parsedName.name)}`);
     try {
       await new Promise((resolve, reject) => {
         db.run(`UPDATE servers SET name = ?, icon = ? WHERE id = ?`, [parsedName.name, icon, serverId], function (err) {
@@ -679,7 +717,8 @@ io.on('connection', (socket) => {
   // 'server:channel' room and its message history) stays the same.
   socket.on('rename channel', async (payload, ack) => {
     const reply = typeof ack === 'function' ? ack : () => {};
-    if (!requireAdmin(reply)) return;
+    const adminUser = requireAdmin(reply, 'rename channel');
+    if (!adminUser) return;
     if (!payload || typeof payload !== 'object') return reply({ ok: false, error: 'Invalid request.' });
     const { serverId, channelId } = payload;
     if (!isValidChannelId(serverId, channelId)) return reply({ ok: false, error: 'That channel does not exist.' });
@@ -691,6 +730,7 @@ io.on('connection', (socket) => {
       return reply({ ok: false, error: 'A channel with that name already exists in this server.' });
     }
 
+    console.log(`[ADMIN] rename channel: socket=${socket.id} user=${JSON.stringify(adminUser.username)} serverId=${serverId} channelId=${channelId} requestedName=${JSON.stringify(parsedName.name)}`);
     try {
       await new Promise((resolve, reject) => {
         db.run(`UPDATE channels SET name = ? WHERE serverId = ? AND id = ?`, [parsedName.name, serverId, channelId], function (err) {
