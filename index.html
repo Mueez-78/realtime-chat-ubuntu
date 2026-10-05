@@ -3,17 +3,27 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#111214" />
+<meta name="theme-color" content="#0e0f11" />
 <meta name="color-scheme" content="dark" />
 <title>DIT Chat</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a84ff'/%3E%3Cpath d='M9 10h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8l-5 4v-4H9a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z' fill='%23fff'/%3E%3C/svg%3E" />
 <style>
+  /* Palette: near-black + dark gray panels + white text, with a restrained iOS-style blue accent */
   :root {
-    --bg-rail: #111214; --bg-panel: #1a1c20; --bg-chat: #212328; --bg-elev: #2a2d33; --bg-input: #2e3138;
-    --hover: rgba(255,255,255,0.05); --active: rgba(255,255,255,0.09); --divider: rgba(255,255,255,0.07);
-    --text: #e8eaed; --muted: #a2a8b0; --faint: #747b84;
-    --accent: #00a884; --accent-btn: #00875f; --accent-btn-hover: #00754f;
-    --online: #23c55e; --connecting: #ffb74d; --danger: #f26d6d;
-    --rail-w: 72px; --panel-w: 240px; --header-h: 56px; --radius: 10px;
+    --bg-app: #0e0f11;      /* server rail, entry screen */
+    --bg-chat: #131416;     /* main chat */
+    --bg-panel: #1a1b1e;    /* channel + member panels, dialogs */
+    --bg-elev: #222327;     /* server icons, raised controls */
+    --bg-input: #1d1e21;    /* inputs, composer */
+    --border: rgba(255,255,255,0.07);
+    --border-strong: rgba(255,255,255,0.12);
+    --hover: rgba(255,255,255,0.045);
+    --active: rgba(255,255,255,0.07);
+    --text: #ececef; --text-2: #b5b8be; --muted: #8b8f97; --faint: #6c7078;
+    --accent: #0a84ff; --accent-hover: #3395ff; --accent-press: #0071e3;
+    --accent-soft: rgba(10,132,255,0.14); --accent-text: #5aa9ff;
+    --danger: #ff453a; --warning: #ffb340;
+    --rail-w: 72px; --panel-w: 240px; --members-w: 240px; --header-h: 56px;
     --safe-bottom: env(safe-area-inset-bottom, 0px);
   }
 
@@ -25,172 +35,217 @@
     height: 100vh; height: 100dvh; overflow: hidden; width: 100%;
     -webkit-font-smoothing: antialiased;
   }
-  button, input { font: inherit; color: inherit; }
+  button, input, select { font: inherit; color: inherit; }
   button { cursor: pointer; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   [hidden] { display: none !important; }
+  a { color: var(--accent-text); }
 
-  .icon-btn { background: none; border: none; color: var(--muted); width: 40px; height: 40px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0; }
+  .icon-btn { background: none; border: none; color: var(--muted); width: 40px; height: 40px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0; transition: background 0.12s, color 0.12s; }
   .icon-btn:hover { background: var(--hover); color: var(--text); }
-  .icon-btn svg { width: 22px; height: 22px; fill: currentColor; }
+  .icon-btn[aria-expanded="true"] { color: var(--text); }
+  .icon-btn svg { width: 20px; height: 20px; fill: currentColor; }
 
   /* ---------- App shell ---------- */
   #app-container { display: flex; width: 100%; height: 100%; }
 
   /* Sidebar = server rail + channel panel. Mobile: off-canvas drawer. Desktop: static columns. */
   .sidebar { position: fixed; top: 0; bottom: 0; left: 0; z-index: 40; width: min(320px, 88vw); display: flex; background: var(--bg-panel); transform: translateX(-100%); transition: transform 0.2s ease; }
-  .sidebar.open { transform: translateX(0); box-shadow: 8px 0 24px rgba(0,0,0,0.4); }
-  #sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 35; display: none; }
-  #sidebar-overlay.visible { display: block; }
+  .sidebar.open { transform: translateX(0); }
+  #sidebar-overlay, #members-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 35; display: none; }
+  #sidebar-overlay.visible, #members-overlay.visible { display: block; }
 
-  .server-rail { width: var(--rail-w); flex-shrink: 0; background: var(--bg-rail); display: flex; flex-direction: column; min-height: 0; }
+  /* ---------- Server rail ---------- */
+  .server-rail { width: var(--rail-w); flex-shrink: 0; background: var(--bg-app); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
   .server-list { flex: 1; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; scrollbar-width: none; }
   .server-list::-webkit-scrollbar { display: none; }
-  .server-item { position: relative; width: 48px; height: 48px; flex-shrink: 0; border: none; padding: 0; border-radius: 50%; background: var(--bg-elev); display: flex; align-items: center; justify-content: center; transition: border-radius 0.15s ease, background 0.15s ease; }
-  .server-item:hover { border-radius: 16px; background: var(--bg-input); }
-  .server-item.active { border-radius: 16px; background: var(--accent-btn); }
-  .server-item::before { content: ''; position: absolute; left: -12px; top: 50%; width: 4px; height: 0; margin-top: 0; background: var(--text); border-radius: 0 4px 4px 0; transition: height 0.15s ease, margin-top 0.15s ease; }
-  .server-item:hover::before { height: 20px; margin-top: -10px; }
-  .server-item.active::before { height: 36px; margin-top: -18px; }
-  .server-icon { font-size: 1.45em; line-height: 1; }
-  .server-lock { position: absolute; right: -3px; bottom: -3px; width: 20px; height: 20px; border-radius: 50%; background: var(--bg-rail); font-size: 11px; display: flex; align-items: center; justify-content: center; }
-  .rail-retry { width: 48px; height: 48px; border-radius: 50%; border: 1px dashed var(--danger); background: none; color: var(--danger); font-size: 1.3em; }
-  .add-server-btn { color: var(--accent); font-size: 1.6em; font-weight: 300; line-height: 1; }
-  .add-server-btn:hover { background: var(--accent-btn); color: #fff; }
+  .server-item { position: relative; width: 46px; height: 46px; flex-shrink: 0; border: none; padding: 0; border-radius: 14px; background: var(--bg-elev); display: flex; align-items: center; justify-content: center; transition: background 0.12s; }
+  .server-item:hover { background: #2a2b30; }
+  .server-item.active { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .server-item::before { content: ''; position: absolute; left: -13px; top: 50%; width: 4px; height: 0; margin-top: 0; background: var(--text-2); border-radius: 0 3px 3px 0; transition: height 0.12s, margin-top 0.12s; }
+  .server-item:hover::before { height: 16px; margin-top: -8px; }
+  .server-item.active::before { height: 30px; margin-top: -15px; background: var(--accent); }
+  .server-icon { font-size: 1.35em; line-height: 1; }
+  .server-lock { position: absolute; right: -4px; bottom: -4px; width: 18px; height: 18px; border-radius: 50%; background: var(--bg-app); border: 1px solid var(--border-strong); display: flex; align-items: center; justify-content: center; color: var(--text-2); }
+  .server-lock svg { width: 10px; height: 10px; fill: currentColor; }
+  .rail-separator { width: 28px; height: 1px; background: var(--border-strong); flex-shrink: 0; margin: 2px 0; }
+  .rail-retry { width: 46px; height: 46px; border-radius: 14px; border: 1px dashed var(--danger); background: none; color: var(--danger); font-size: 1.2em; }
+  .add-server-btn { background: transparent; border: 1px dashed var(--border-strong); color: var(--accent-text); font-size: 1.5em; font-weight: 300; line-height: 1; }
+  .add-server-btn:hover { background: var(--accent-soft); border-color: var(--accent); }
+
+  /* ---------- Channel panel ---------- */
+  .channel-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-panel); border-right: 1px solid var(--border); }
+  .channel-panel-header { height: var(--header-h); padding: 0 8px 0 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .channel-server-name { font-weight: 600; font-size: 0.97em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .channel-header-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
-
-  .channel-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-panel); }
-  .channel-panel-header { height: var(--header-h); padding: 0 8px 0 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--divider); flex-shrink: 0; }
-  .channel-server-name { font-weight: 650; font-size: 1em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .channel-section-title { padding: 18px 16px 6px; font-size: 0.72em; font-weight: 700; letter-spacing: 0.04em; color: var(--faint); text-transform: uppercase; }
-  .channel-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; display: flex; flex-direction: column; gap: 2px; }
-  .channel-item { width: 100%; min-height: 40px; background: none; border: none; color: var(--muted); text-align: left; padding: 8px 10px; border-radius: 6px; display: flex; align-items: center; gap: 8px; }
-  .channel-item:hover { background: var(--hover); color: var(--text); }
-  .channel-item.active { background: var(--active); color: var(--text); font-weight: 600; }
-  .channel-hash { font-size: 1.2em; line-height: 1; color: var(--faint); width: 14px; text-align: center; }
-  .channel-item.active .channel-hash { color: var(--accent); }
+  .channel-section-title, .member-section-title { padding: 16px 16px 6px; font-size: 0.7em; font-weight: 600; letter-spacing: 0.05em; color: var(--faint); text-transform: uppercase; }
+  .channel-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; display: flex; flex-direction: column; gap: 1px; }
+  .channel-item { width: 100%; min-height: 36px; background: none; border: none; color: var(--muted); text-align: left; padding: 6px 8px; border-radius: 6px; display: flex; align-items: center; gap: 8px; font-size: 0.95em; transition: background 0.12s, color 0.12s; }
+  .channel-item:hover { background: var(--hover); color: var(--text-2); }
+  .channel-item.active { background: var(--accent-soft); color: var(--text); font-weight: 500; }
+  .channel-hash { font-size: 1.15em; line-height: 1; color: var(--faint); width: 16px; text-align: center; }
+  .channel-item.active .channel-hash { color: var(--accent-text); }
   .sidebar-status { padding: 12px 8px; font-size: 0.85em; color: var(--muted); }
-  .sidebar-status button { display: block; margin-top: 10px; background: var(--accent-btn); color: #fff; border: none; border-radius: 6px; padding: 8px 14px; font-weight: 600; }
+  .sidebar-status button { display: block; margin-top: 10px; background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 7px 14px; font-weight: 600; }
 
-  .user-panel { display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 12px; padding-bottom: calc(10px + var(--safe-bottom)); background: rgba(0,0,0,0.18); flex-shrink: 0; }
-  .user-panel-info { flex: 1; min-width: 0; line-height: 1.25; }
-  #me-name { font-weight: 600; font-size: 0.92em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #me-role { font-size: 0.75em; color: var(--muted); }
-  #me-role.admin { color: var(--accent); }
+  .user-panel { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; padding-bottom: calc(8px + var(--safe-bottom)); background: #161719; border-top: 1px solid var(--border); flex-shrink: 0; }
+  .user-panel-info { flex: 1; min-width: 0; line-height: 1.3; }
+  #me-name { font-weight: 600; font-size: 0.88em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #me-role { font-size: 0.74em; color: var(--muted); }
+  .badge, #me-role.admin { display: inline-block; font-size: 0.68rem; font-weight: 600; line-height: 1; letter-spacing: 0.02em; color: var(--accent-text); background: var(--accent-soft); border-radius: 4px; padding: 3px 5px; vertical-align: middle; }
 
   /* ---------- Avatars ---------- */
-  .avatar-sm, .msg-avatar { border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-weight: 700; color: #111214; }
-  .avatar-sm { width: 34px; height: 34px; font-size: 0.9em; }
-  .msg-avatar { width: 40px; height: 40px; font-size: 1em; margin-top: 2px; }
-  .avatar-sm img, .msg-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .avatar-sm, .msg-avatar, .member-avatar { position: relative; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-weight: 600; color: #101113; }
+  .avatar-sm { width: 32px; height: 32px; font-size: 0.85em; overflow: hidden; }
+  .msg-avatar { width: 40px; height: 40px; font-size: 0.95em; margin-top: 2px; overflow: hidden; }
+  .member-avatar { width: 32px; height: 32px; font-size: 0.82em; }
+  .avatar-sm img, .msg-avatar img, .member-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%; }
 
   /* ---------- Chat column ---------- */
   .main-content { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-chat); }
-  .header { height: var(--header-h); padding: 0 8px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--divider); flex-shrink: 0; background: var(--bg-chat); }
-  .server-badge { width: 32px; height: 32px; border-radius: 10px; background: var(--bg-elev); display: flex; align-items: center; justify-content: center; font-size: 1.1em; flex-shrink: 0; }
-  .header-info { min-width: 0; display: flex; flex-direction: column; justify-content: center; }
-  .header-title { font-size: 0.98em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
-  .header-title .hdr-channel { color: var(--text); font-weight: 650; }
-  .header-status { font-size: 0.76em; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .dot.connecting { background: var(--connecting); } .dot.online { background: var(--online); } .dot.offline { background: var(--danger); }
+  .header { height: var(--header-h); padding: 0 8px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .header-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; line-height: 1.25; }
+  .header-title { font-size: 0.98em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .header-title .hdr-hash { color: var(--faint); font-weight: 400; margin-right: 2px; }
+  .header-sub { font-size: 0.76em; color: var(--muted); display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; }
+  .header-sub .sep { color: var(--faint); }
+  .header-sub span:empty + .sep { display: none; } /* hide a separator after an empty part */
+  #header-server { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .header-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .dot.connecting { background: var(--warning); } .dot.online { background: var(--accent); } .dot.offline { background: var(--danger); }
 
   .chat-area { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  #messages { list-style: none; margin: 0; padding: 12px 0 8px; flex: 1; overflow-y: auto; overscroll-behavior: contain; }
-  #messages::-webkit-scrollbar { width: 8px; } #messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+  #messages { list-style: none; margin: 0; padding: 8px 0 12px; flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+  #messages::-webkit-scrollbar { width: 8px; } #messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
 
-  .message { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 12px; padding: 2px 44px 2px 14px; margin-top: 14px; }
-  .message.grouped { margin-top: 0; }
+  .channel-intro { padding: 24px 16px 14px; margin: 0 16px 8px; border-bottom: 1px solid var(--border); }
+  .channel-intro-icon { width: 48px; height: 48px; border-radius: 50%; background: var(--bg-elev); color: var(--text-2); display: flex; align-items: center; justify-content: center; font-size: 1.6em; margin-bottom: 10px; }
+  .channel-intro h3 { margin: 0 0 4px; font-size: 1.15em; font-weight: 600; }
+  .channel-intro p { margin: 0; color: var(--muted); font-size: 0.88em; }
+
+  .message { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 12px; padding: 3px 52px 3px 16px; margin-top: 12px; }
+  .message.grouped { margin-top: 0; padding-top: 1px; padding-bottom: 1px; }
   .message.grouped .msg-avatar { height: 0; visibility: hidden; }
   .message.grouped .msg-meta { display: none; }
-  .message:hover { background: rgba(255,255,255,0.025); }
-  .msg-meta { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-  .sender { font-weight: 650; font-size: 0.95em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .message-me .sender { color: var(--accent); }
-  .admin-badge { font-size: 0.85em; }
-  .timestamp { font-size: 0.72em; color: var(--faint); white-space: nowrap; }
-  .text { white-space: pre-wrap; overflow-wrap: anywhere; color: #dcdfe3; }
-  .delete-btn { position: absolute; top: 2px; right: 8px; width: 32px; height: 32px; border: none; border-radius: 6px; background: var(--bg-elev); color: var(--muted); font-size: 0.95em; opacity: 0; transition: opacity 0.15s; }
+  @media (hover: hover) { .message:hover { background: rgba(255,255,255,0.02); } } /* no sticky highlight after a tap */
+  .msg-meta { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+  .sender { font-weight: 600; font-size: 0.93em; color: var(--accent-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .message-me .sender { color: var(--text); }
+  .msg-meta .badge { align-self: center; }
+  .timestamp { font-size: 0.7em; color: var(--faint); white-space: nowrap; }
+  .text { white-space: pre-wrap; overflow-wrap: anywhere; color: #dcdee2; font-size: 0.97em; }
+  .text a { color: var(--accent-text); text-decoration: none; }
+  .text a:hover { text-decoration: underline; }
+  .delete-btn { position: absolute; top: 2px; right: 12px; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); color: var(--muted); display: flex; align-items: center; justify-content: center; padding: 0; opacity: 0; transition: opacity 0.12s, color 0.12s; }
+  .delete-btn svg { width: 16px; height: 16px; fill: currentColor; }
   .message:hover .delete-btn, .delete-btn:focus-visible { opacity: 1; }
   .delete-btn:hover { color: var(--danger); }
-  @media (hover: none) { .delete-btn { opacity: 0.8; background: transparent; } }
-  .system-message { text-align: center; font-size: 0.8em; color: var(--muted); margin: 12px auto; padding: 4px 12px; width: fit-content; max-width: 90%; background: var(--bg-elev); border-radius: 999px; }
+  @media (hover: none) { .delete-btn { opacity: 0.75; background: transparent; border-color: transparent; } }
+  .system-message { text-align: center; font-size: 0.78em; color: var(--muted); margin: 10px auto; padding: 3px 10px; width: fit-content; max-width: 90%; border: 1px solid var(--border); border-radius: 999px; }
 
-  #typing-indicator { height: 0; overflow: hidden; font-size: 0.78em; color: var(--muted); padding: 0 16px; flex-shrink: 0; }
+  #typing-indicator { height: 0; overflow: hidden; font-size: 0.76em; color: var(--muted); padding: 0 16px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
   #typing-indicator.visible { height: 20px; }
-  .scroll-bottom-btn { position: absolute; bottom: 10px; right: 14px; width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--bg-elev); color: var(--text); box-shadow: 0 2px 8px rgba(0,0,0,0.35); opacity: 0; pointer-events: none; transition: opacity 0.15s; }
+  #typing-indicator.visible::before { content: ''; width: 18px; height: 4px; flex-shrink: 0; background: radial-gradient(circle, var(--text-2) 1.6px, transparent 1.8px) 0 0 / 6px 4px repeat-x; }
+  .scroll-bottom-btn { position: absolute; bottom: 10px; right: 16px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--bg-panel); color: var(--text); opacity: 0; pointer-events: none; transition: opacity 0.15s; }
   .scroll-bottom-btn.visible { opacity: 1; pointer-events: auto; }
 
   /* ---------- Composer ---------- */
-  #form { position: relative; padding: 4px 12px calc(10px + var(--safe-bottom)); flex-shrink: 0; }
-  .composer-box { display: flex; align-items: center; gap: 4px; background: var(--bg-input); border-radius: 12px; padding: 4px; }
+  #form { position: relative; padding: 2px 12px calc(10px + var(--safe-bottom)); flex-shrink: 0; }
+  .composer-box { display: flex; align-items: center; gap: 2px; background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: 10px; padding: 3px 4px; transition: border-color 0.12s; }
+  .composer-box:focus-within { border-color: rgba(10,132,255,0.55); }
   #input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; font-size: 16px; padding: 8px 4px; color: var(--text); }
   #input::placeholder { color: var(--faint); }
   #input:disabled { opacity: 0.6; }
-  #emoji-btn { font-size: 1.25em; }
+  #emoji-btn { font-size: 1.2em; width: 38px; height: 38px; filter: grayscale(0.35); }
+  #emoji-btn:hover { filter: none; }
   #char-counter { font-size: 0.75em; color: var(--danger); display: none; padding: 0 4px; } #char-counter.visible { display: inline; }
-  .send-btn { width: 38px; height: 38px; border-radius: 10px; border: none; background: var(--accent-btn); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .send-btn:hover { background: var(--accent-btn-hover); }
+  .send-btn { width: 36px; height: 36px; border-radius: 50%; border: none; background: var(--bg-elev); display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.12s; }
+  .send-btn svg { width: 17px; height: 17px; fill: var(--muted); transform: translateX(1px); }
+  .send-btn.ready { background: var(--accent); }
+  .send-btn.ready svg { fill: #fff; }
+  .send-btn.ready:hover { background: var(--accent-hover); }
+  .send-btn.ready:active { background: var(--accent-press); }
   .send-btn:disabled { opacity: 0.5; cursor: default; }
-  .send-btn svg { width: 18px; height: 18px; fill: #fff; }
-  .emoji-panel { position: absolute; left: 12px; bottom: calc(100% - 2px); width: min(320px, calc(100vw - 24px)); max-height: 220px; overflow-y: auto; background: var(--bg-elev); border-radius: 12px; padding: 8px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; box-shadow: 0 8px 24px rgba(0,0,0,0.45); visibility: hidden; z-index: 20; }
+  .emoji-panel { position: absolute; left: 12px; bottom: calc(100% - 2px); width: min(320px, calc(100vw - 24px)); max-height: 220px; overflow-y: auto; background: var(--bg-panel); border: 1px solid var(--border-strong); border-radius: 10px; padding: 6px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; box-shadow: 0 8px 20px rgba(0,0,0,0.35); visibility: hidden; z-index: 20; }
   .emoji-panel.visible { visibility: visible; }
-  .emoji-panel button { background: none; border: none; font-size: 1.35em; padding: 6px 0; border-radius: 6px; }
+  .emoji-panel button { background: none; border: none; font-size: 1.3em; padding: 6px 0; border-radius: 6px; }
   .emoji-panel button:hover { background: var(--hover); }
 
-  /* ---------- Entry / profile / admin modal ---------- */
-  .modal-overlay { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; padding: 16px; background: var(--bg-rail); overflow-y: auto; }
+  /* ---------- Member panel (who is online in the current server) ---------- */
+  .member-panel { position: fixed; top: 0; bottom: 0; right: 0; z-index: 40; width: min(280px, 85vw); background: var(--bg-panel); border-left: 1px solid var(--border); display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.2s ease; }
+  .member-panel.open { transform: translateX(0); }
+  .member-panel-header { height: var(--header-h); padding: 0 8px 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); flex-shrink: 0; font-weight: 600; font-size: 0.97em; }
+  .member-list { list-style: none; margin: 0; padding: 0 8px 12px; overflow-y: auto; flex: 1; }
+  .member { display: flex; align-items: center; gap: 10px; padding: 5px 8px; border-radius: 6px; min-height: 42px; }
+  @media (hover: hover) { .member:hover { background: var(--hover); } }
+  .member-status { position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg-panel); }
+  .member-name { flex: 1; min-width: 0; font-size: 0.9em; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .member-name .you, .member-count { color: var(--faint); font-size: 0.85em; }
+  .member-empty { padding: 8px 16px; color: var(--faint); font-size: 0.85em; }
+
+  /* ---------- Entry / profile / admin dialogs ---------- */
+  .modal-overlay { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; padding: 16px; background: var(--bg-app); overflow-y: auto; }
   .modal-overlay.visible { display: flex; }
-  .modal-overlay.edit-mode { background: rgba(0,0,0,0.65); }
-  .modal-card { position: relative; width: 100%; max-width: 380px; background: var(--bg-panel); border-radius: 16px; padding: 28px 22px 18px; text-align: center; box-shadow: 0 16px 48px rgba(0,0,0,0.5); margin: auto; }
+  .modal-overlay.edit-mode { background: rgba(0,0,0,0.6); }
+  .modal-card { position: relative; width: 100%; max-width: 380px; background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px; padding: 28px 22px 18px; text-align: center; box-shadow: 0 12px 32px rgba(0,0,0,0.35); margin: auto; }
   .close-btn { position: absolute; top: 8px; right: 8px; }
-  .brand { font-size: 0.8em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
-  .modal-card h2 { margin: 6px 0 4px; font-size: 1.4em; }
-  .modal-card p { margin: 0 0 18px; color: var(--muted); font-size: 0.92em; }
-  #avatar-preview { width: 84px; height: 84px; margin: 0 auto; border-radius: 50%; background: var(--bg-input); border: 2px dashed var(--faint); display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; font-size: 26px; }
+  .brand { font-size: 0.72em; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-text); }
+  .modal-card h2 { margin: 6px 0 4px; font-size: 1.3em; font-weight: 600; }
+  .modal-card p { margin: 0 0 18px; color: var(--muted); font-size: 0.9em; }
+  #avatar-preview { width: 80px; height: 80px; margin: 0 auto; border-radius: 50%; background: var(--bg-input); border: 1px dashed var(--border-strong); display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; font-size: 24px; transition: border-color 0.12s; }
+  #avatar-preview:hover { border-color: var(--accent); }
   #avatar-preview.has-image { border: none; }
   #avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
-  .avatar-hint { display: block; font-size: 0.75em; color: var(--faint); margin-top: 6px; }
+  .avatar-hint { display: block; font-size: 0.74em; color: var(--faint); margin-top: 6px; }
   .modal-form { display: flex; flex-direction: column; gap: 6px; margin-top: 18px; text-align: left; }
-  .field-label { font-size: 0.72em; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
-  .modal-form input, .modal-form select { width: 100%; padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid transparent; background: var(--bg-input); color: var(--text); outline: none; }
+  .field-label { font-size: 0.7em; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
+  .modal-form input, .modal-form select { width: 100%; padding: 11px 12px; font-size: 16px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg-input); color: var(--text); outline: none; transition: border-color 0.12s; }
   .modal-form input:focus, .modal-form select:focus { border-color: var(--accent); }
   .modal-form input:disabled { opacity: 0.6; }
   .form-error { min-height: 1.2em; font-size: 0.82em; color: var(--danger); }
-  .form-success { font-size: 0.82em; color: var(--online); }
-  .field-hint { font-size: 0.78em; color: var(--faint); }
+  .form-success { font-size: 0.82em; color: var(--accent-text); }
+  .field-hint { font-size: 0.76em; color: var(--faint); }
   .lock-status { font-size: 0.82em; color: var(--muted); padding: 2px 0; }
   .icon-choices { display: flex; flex-wrap: wrap; gap: 6px; }
-  .icon-choices button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid transparent; background: var(--bg-input); font-size: 1.2em; }
-  .icon-choices button.selected { border-color: var(--accent); background: var(--active); }
-  .btn-secondary { width: 100%; padding: 11px; border-radius: 8px; border: 1px solid var(--divider); background: none; color: var(--text); font-weight: 600; }
+  .icon-choices button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-input); font-size: 1.15em; transition: border-color 0.12s, background 0.12s; }
+  .icon-choices button:hover { border-color: var(--border-strong); }
+  .icon-choices button.selected { border-color: var(--accent); background: var(--accent-soft); }
+  .btn-primary { width: 100%; padding: 11px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; margin-top: 4px; transition: background 0.12s; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-primary:active { background: var(--accent-press); }
+  .btn-primary:disabled { opacity: 0.6; cursor: default; }
+  .btn-secondary { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-strong); background: none; color: var(--text); font-weight: 500; transition: background 0.12s; }
   .btn-secondary:hover { background: var(--hover); }
   .btn-secondary:disabled { opacity: 0.45; cursor: default; }
-  .btn-primary { width: 100%; padding: 12px; border: none; border-radius: 8px; background: var(--accent-btn); color: #fff; font-weight: 650; margin-top: 4px; }
-  .btn-primary:hover { background: var(--accent-btn-hover); }
-  .btn-primary:disabled { opacity: 0.6; cursor: default; }
-  .link-btn { background: none; border: none; color: var(--faint); font-size: 0.82em; padding: 8px 12px; margin-top: 10px; border-radius: 6px; }
-  .link-btn:hover { color: var(--text); text-decoration: underline; }
+  .link-btn { background: none; border: none; color: var(--muted); font-size: 0.82em; padding: 8px 12px; margin-top: 10px; border-radius: 6px; }
+  .link-btn:hover { color: var(--accent-text); }
 
-  #toast { position: fixed; left: 50%; bottom: calc(84px + var(--safe-bottom)); transform: translateX(-50%); max-width: calc(100vw - 32px); background: #f1f3f4; color: #111214; padding: 10px 16px; border-radius: 10px; font-size: 0.86em; box-shadow: 0 6px 18px rgba(0,0,0,0.35); opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 200; }
+  #toast { position: fixed; left: 50%; bottom: calc(80px + var(--safe-bottom)); transform: translateX(-50%); max-width: calc(100vw - 32px); background: #26272b; color: var(--text); border: 1px solid var(--border-strong); padding: 9px 14px; border-radius: 8px; font-size: 0.86em; box-shadow: 0 6px 16px rgba(0,0,0,0.3); opacity: 0; pointer-events: none; transition: opacity 0.18s; z-index: 200; }
   #toast.visible { opacity: 1; }
 
   /* ---------- Mobile-only controls ---------- */
   .menu-btn, .drawer-close { display: inline-flex; }
 
-  /* ---------- Tablet / desktop: static three-column layout ---------- */
+  /* ---------- Tablet / desktop: static columns ---------- */
   @media (min-width: 768px) {
-    .sidebar { position: static; transform: none; width: auto; z-index: auto; box-shadow: none; transition: none; }
-    .sidebar.open { box-shadow: none; }
+    .sidebar { position: static; transform: none; width: auto; z-index: auto; transition: none; }
     .channel-panel { width: var(--panel-w); flex: none; }
     #sidebar-overlay, #sidebar-overlay.visible { display: none; }
     .menu-btn, .drawer-close { display: none; }
-    .header { padding: 0 16px; gap: 10px; }
-    .message { padding-left: 18px; padding-right: 52px; }
-    #form { padding: 4px 16px calc(14px + var(--safe-bottom)); }
+    .icon-btn { width: 36px; height: 36px; }
+    .header { padding: 0 12px 0 16px; }
+    .message { padding-left: 16px; padding-right: 56px; }
+    #form { padding: 2px 16px calc(16px + var(--safe-bottom)); }
     #toast { bottom: 96px; }
   }
-  @media (min-width: 1200px) { :root { --panel-w: 260px; } }
+  /* Wide screens: the member list becomes a fourth, collapsible column */
+  @media (min-width: 1200px) {
+    .member-panel { position: static; transform: none; width: var(--members-w); flex-shrink: 0; transition: none; z-index: auto; }
+    #app-container.members-collapsed .member-panel { display: none; }
+    #members-overlay, #members-overlay.visible { display: none; }
+    #close-members-btn { display: none; }
+  }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
 </style>
 </head>
@@ -207,7 +262,7 @@
           <span class="channel-server-name" id="channel-server-name"></span>
           <div class="channel-header-actions">
             <button type="button" id="server-settings-btn" class="icon-btn" title="Change server password" aria-label="Change server password" hidden>
-              <svg viewBox="0 0 24 24"><path d="M17 9V7A5 5 0 0 0 7 7v2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zM9 7a3 3 0 0 1 6 0v2H9V7zm4 9.73V18h-2v-1.27a2 2 0 1 1 2 0z"/></svg>
+              <svg viewBox="0 0 24 24"><path d="M12.65 10A6 6 0 1 0 12.65 14H17v4h4v-4h2v-4H12.65zM7 14a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/></svg>
             </button>
             <button type="button" id="close-sidebar-btn" class="icon-btn drawer-close" aria-label="Close menu">
               <svg viewBox="0 0 24 24"><path d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4z"/></svg>
@@ -234,13 +289,19 @@
         <button type="button" id="nav-home" class="icon-btn menu-btn" aria-label="Open servers and channels">
           <svg viewBox="0 0 24 24"><path d="M4 6h16a1 1 0 1 0 0-2H4a1 1 0 0 0 0 2zm16 5H4a1 1 0 0 0 0 2h16a1 1 0 1 0 0-2zm0 7H4a1 1 0 0 0 0 2h16a1 1 0 1 0 0-2z"/></svg>
         </button>
-        <div class="server-badge" id="header-avatar" aria-hidden="true">💬</div>
         <div class="header-info">
           <div class="header-title" id="header-title">Loading…</div>
-          <div class="header-status">
+          <div class="header-sub">
+            <span id="header-server"></span><span class="sep" aria-hidden="true">·</span>
+            <span id="header-access"></span><span class="sep" aria-hidden="true">·</span>
             <span class="dot connecting" id="status-dot"></span>
             <span id="status-text">Connecting…</span>
           </div>
+        </div>
+        <div class="header-actions">
+          <button type="button" id="members-btn" class="icon-btn" title="Show members" aria-label="Show members" aria-controls="member-panel" aria-expanded="false">
+            <svg viewBox="0 0 24 24"><path d="M16 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zm-8 0a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zm0 2c-2.7 0-8 1.34-8 4v2.5h16V17c0-2.66-5.3-4-8-4zm8 0c-.32 0-.69.02-1.08.06 1.32.96 2.08 2.24 2.08 3.94v2.5h7V17c0-2.66-5.3-4-8-4z"/></svg>
+          </button>
         </div>
       </div>
 
@@ -262,6 +323,19 @@
         <div class="emoji-panel" id="emoji-panel"></div>
       </form>
     </main>
+
+    <!-- Who is connected to the current server (from the 'user list' event) -->
+    <div id="members-overlay"></div>
+    <aside id="member-panel" class="member-panel" aria-label="Members">
+      <div class="member-panel-header">
+        <span>Members</span>
+        <button type="button" id="close-members-btn" class="icon-btn" aria-label="Close members">
+          <svg viewBox="0 0 24 24"><path d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4z"/></svg>
+        </button>
+      </div>
+      <div class="member-section-title" id="member-online-title">Online — 0</div>
+      <ul class="member-list" id="member-list"></ul>
+    </aside>
   </div>
 
   <div class="modal-overlay" id="username-modal" role="dialog" aria-modal="true" aria-labelledby="entry-title">
@@ -363,8 +437,16 @@
     const typingIndicator = document.getElementById('typing-indicator');
     const scrollBtn = document.getElementById('scroll-bottom-btn');
 
+    const appContainer = document.getElementById('app-container');
     const headerTitle = document.getElementById('header-title');
-    const headerAvatar = document.getElementById('header-avatar');
+    const headerServer = document.getElementById('header-server');
+    const headerAccess = document.getElementById('header-access');
+    const membersBtn = document.getElementById('members-btn');
+    const memberPanel = document.getElementById('member-panel');
+    const membersOverlay = document.getElementById('members-overlay');
+    const closeMembersBtn = document.getElementById('close-members-btn');
+    const memberList = document.getElementById('member-list');
+    const memberOnlineTitle = document.getElementById('member-online-title');
     const serverSidebar = document.getElementById('server-sidebar');
     const serverList = document.getElementById('server-list');
     const sidebarOverlay = document.getElementById('sidebar-overlay');
@@ -423,6 +505,8 @@
 
     const MAX_LEN = 500;
     const MAX_NAME_LEN = 24;
+    const LOCK_ICON = '<svg viewBox="0 0 24 24"><path d="M17 9V7A5 5 0 0 0 7 7v2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2zM9 7a3 3 0 0 1 6 0v2H9V7z"/></svg>';
+    const TRASH_ICON = '<svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9zm4 2v8h2v-8h-2zm4 0v8h2v-8h-2z"/></svg>';
     let lastKnownUserCount = 0; let typingTimeout = null; const typingUsers = new Set(); let isNearBottom = true; let toastTimeout = null;
 
     // ==========================================
@@ -466,8 +550,9 @@
       const name = displayName || username || 'Guest';
       fillAvatar(meAvatar, name, userAvatar);
       meName.textContent = name;
-      meRole.textContent = isAdmin ? 'Admin 🛡️' : 'Guest';
+      meRole.textContent = isAdmin ? 'Admin' : 'Guest';
       meRole.classList.toggle('admin', isAdmin);
+      renderMembers();
     }
 
     function renderAvatarPreview() {
@@ -547,7 +632,7 @@
       if (e.key !== 'Escape') return;
       if (adminModal.classList.contains('visible')) closeAdminModal();
       else if (usernameModal.classList.contains('visible') && displayName) closeEntry();
-      else closeSidebar();
+      else { closeSidebar(); closeMembers(); }
     });
 
     usernameForm.addEventListener('submit', (e) => {
@@ -643,11 +728,17 @@
         if (s.id === currentServer) btn.setAttribute('aria-current', 'true');
         const icon = document.createElement('span'); icon.className = 'server-icon'; icon.textContent = s.icon;
         btn.appendChild(icon);
-        if (s.isLocked) { const lock = document.createElement('span'); lock.className = 'server-lock'; lock.textContent = '🔒'; btn.appendChild(lock); }
+        if (s.isLocked) {
+          const lock = document.createElement('span'); lock.className = 'server-lock'; lock.setAttribute('aria-hidden', 'true');
+          lock.innerHTML = LOCK_ICON; // static markup
+          btn.appendChild(lock);
+        }
         btn.addEventListener('click', () => switchServer(s.id));
         serverList.appendChild(btn);
       });
       if (isAdmin) {
+        const separator = document.createElement('div'); separator.className = 'rail-separator';
+        serverList.appendChild(separator);
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
         addBtn.id = 'add-server-btn';
@@ -682,12 +773,14 @@
       });
     }
 
+    // Title row: "#channel". Sub row: "Server · Public/Locked server · N online"
     function setHeader(server, channel) {
       headerTitle.textContent = '';
-      if (!server || !channel) { headerTitle.textContent = server ? server.name : 'DIT Chat'; return; }
-      const s = document.createElement('span'); s.className = 'hdr-server'; s.textContent = server.name;
-      const c = document.createElement('span'); c.className = 'hdr-channel'; c.textContent = '#' + channel.name;
-      headerTitle.append(s, document.createTextNode(' · '), c);
+      headerServer.textContent = server ? server.name : '';
+      headerAccess.textContent = server ? (server.isLocked ? 'Locked server' : 'Public server') : '';
+      if (!channel) { headerTitle.textContent = server ? server.name : 'DIT Chat'; return; }
+      const hash = document.createElement('span'); hash.className = 'hdr-hash'; hash.textContent = '#';
+      headerTitle.append(hash, document.createTextNode(channel.name));
     }
 
     function loadServers() {
@@ -703,6 +796,7 @@
         .catch(() => {
           serversState = 'error'; renderServers(); renderChannels();
           headerTitle.textContent = 'Unable to load servers.';
+          headerServer.textContent = ''; headerAccess.textContent = '';
         });
     }
 
@@ -715,6 +809,8 @@
           if (!Array.isArray(list) || !list.length) return;
           servers = list;
           renderServers(); renderChannels();
+          const current = findServer(currentServer);
+          if (current) setHeader(current, current.channels.find(c => c.id === currentChannel)); // lock state may have changed
           if (adminModal.classList.contains('visible') && !serverPasswordPanel.hidden) renderPasswordPanel();
         })
         .catch(() => {}); // keep the current list; the next refresh or reconnect will retry
@@ -735,7 +831,6 @@
       localStorage.setItem('lastServerId', serverId);
       localStorage.setItem('lastChannelId', channelId);
       setHeader(server, channel);
-      headerAvatar.textContent = server ? server.icon : '💬';
       input.placeholder = channel ? `Message #${channel.name}` : 'Message…';
       renderServers(); renderChannels();
       messagesEl.innerHTML = '';
@@ -942,7 +1037,7 @@
       if (server && confirm(`Remove the password from ${server.name}? Anyone will be able to join.`)) submitServerPassword(null);
     });
 
-    function openSidebar() { serverSidebar.classList.add('open'); sidebarOverlay.classList.add('visible'); }
+    function openSidebar() { closeMembers(); serverSidebar.classList.add('open'); sidebarOverlay.classList.add('visible'); }
     function closeSidebar() { serverSidebar.classList.remove('open'); sidebarOverlay.classList.remove('visible'); }
     navHome.addEventListener('click', openSidebar);
     sidebarOverlay.addEventListener('click', closeSidebar);
@@ -975,9 +1070,74 @@
       loggedIn = false; navBusy = false; queuedNav = null; awaitingHistory = false;
     });
     socket.on('user list', (users) => {
-      lastKnownUserCount = users.length;
-      if (statusDot.classList.contains('online')) statusText.textContent = `${users.length} online`;
+      members = Array.isArray(users) ? users.filter(u => typeof u === 'string') : [];
+      // Count people, not connections, so the header matches the member list
+      lastKnownUserCount = new Set(members).size;
+      if (statusDot.classList.contains('online')) statusText.textContent = `${lastKnownUserCount} online`;
+      renderMembers();
     });
+
+    // ==========================================
+    // Member panel: everyone connected to the current server.
+    // The backend only tracks live connections, so there is no "offline" list.
+    // Avatars and admin badges come from what this client has seen (messages + own session).
+    // ==========================================
+    let members = [];
+    const knownAvatars = new Map(); // name -> avatar data URL seen on their messages
+    const knownAdmins = new Set();  // names the backend flagged isAdmin on messages (the admin name is reserved server-side)
+
+    function renderMembers() {
+      const counts = new Map();
+      members.forEach(name => counts.set(name, (counts.get(name) || 0) + 1));
+      const isAdminName = (name) => knownAdmins.has(name) || (isAdmin && name === displayName);
+      // Admins first, then you, then alphabetical
+      const names = Array.from(counts.keys()).sort((a, b) =>
+        (isAdminName(b) - isAdminName(a)) || ((b === displayName) - (a === displayName)) || a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+      memberOnlineTitle.textContent = `Online — ${names.length}`;
+      memberList.innerHTML = '';
+      if (!names.length) {
+        const empty = document.createElement('li'); empty.className = 'member-empty';
+        empty.textContent = currentServer ? 'No one else is here yet.' : 'Join a server to see who is online.';
+        memberList.appendChild(empty);
+        return;
+      }
+      names.forEach(name => {
+        const li = document.createElement('li'); li.className = 'member';
+        const avatar = document.createElement('div'); avatar.className = 'member-avatar';
+        fillAvatar(avatar, name, name === displayName ? userAvatar : knownAvatars.get(name));
+        const status = document.createElement('span'); status.className = 'member-status'; status.title = 'Online';
+        avatar.appendChild(status);
+        const label = document.createElement('span'); label.className = 'member-name';
+        label.textContent = name;
+        if (name === displayName) { const you = document.createElement('span'); you.className = 'you'; you.textContent = ' (you)'; label.appendChild(you); }
+        if (counts.get(name) > 1) { const c = document.createElement('span'); c.className = 'member-count'; c.textContent = ` ×${counts.get(name)}`; c.title = 'Connected more than once'; label.appendChild(c); }
+        li.append(avatar, label);
+        if (isAdminName(name)) { const badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = 'Admin'; li.appendChild(badge); }
+        memberList.appendChild(li);
+      });
+    }
+
+    const wideLayout = window.matchMedia('(min-width: 1200px)');
+    function membersVisible() {
+      return wideLayout.matches ? !appContainer.classList.contains('members-collapsed') : memberPanel.classList.contains('open');
+    }
+    function syncMembersButton() {
+      const visible = membersVisible();
+      membersBtn.setAttribute('aria-expanded', String(visible));
+      membersBtn.title = visible ? 'Hide members' : 'Show members';
+      membersBtn.setAttribute('aria-label', membersBtn.title);
+    }
+    function closeMembers() { memberPanel.classList.remove('open'); membersOverlay.classList.remove('visible'); syncMembersButton(); }
+    membersBtn.addEventListener('click', () => {
+      if (wideLayout.matches) appContainer.classList.toggle('members-collapsed');
+      else if (memberPanel.classList.contains('open')) closeMembers();
+      else { closeSidebar(); memberPanel.classList.add('open'); membersOverlay.classList.add('visible'); }
+      syncMembersButton();
+    });
+    closeMembersBtn.addEventListener('click', closeMembers);
+    membersOverlay.addEventListener('click', closeMembers);
+    wideLayout.addEventListener('change', closeMembers);
 
     // ==========================================
     // Messages
@@ -1012,24 +1172,31 @@
         const sender = document.createElement('span');
         sender.className = 'sender';
         sender.textContent = data.user;
-        if (data.isAdmin) { const badge = document.createElement('span'); badge.className = 'admin-badge'; badge.textContent = ' 🛡️'; badge.title = 'Admin'; sender.appendChild(badge); }
+        meta.appendChild(sender);
+        if (data.isAdmin) { const badge = document.createElement('span'); badge.className = 'badge admin-badge'; badge.textContent = 'Admin'; meta.appendChild(badge); }
         const time = document.createElement('span');
         time.className = 'timestamp';
         time.textContent = data.time;
-        meta.append(sender, time);
+        meta.appendChild(time);
 
         const textDiv = document.createElement('div');
         textDiv.className = 'text';
-        textDiv.textContent = data.text;
+        renderMessageText(textDiv, data.text);
         body.append(meta, textDiv);
         li.append(avatar, body);
+
+        // Remember avatars/admin flags so the member list can show them
+        let membersChanged = false;
+        if (data.avatar && knownAvatars.get(data.user) !== data.avatar) { knownAvatars.set(data.user, data.avatar); membersChanged = true; }
+        if (data.isAdmin && !knownAdmins.has(data.user)) { knownAdmins.add(data.user); membersChanged = true; }
+        if (membersChanged && members.includes(data.user)) renderMembers();
 
         // Shown to admins only; the backend re-checks admin rights on every delete
         if (isAdmin) {
           const deleteBtn = document.createElement('button');
           deleteBtn.type = 'button';
           deleteBtn.className = 'delete-btn';
-          deleteBtn.textContent = '🗑️';
+          deleteBtn.innerHTML = TRASH_ICON; // static markup
           deleteBtn.title = 'Delete message for everyone';
           deleteBtn.setAttribute('aria-label', deleteBtn.title);
           deleteBtn.onclick = () => {
@@ -1054,8 +1221,39 @@
       if (next && next.classList.contains('grouped')) next.classList.remove('grouped');
     });
 
+    // Plain text with http(s) links made clickable. Built from text nodes, never parsed as HTML.
+    const LINK_PATTERN = /\bhttps?:\/\/[^\s<>"]+[^\s<>".,:;!?)\]'}]/g;
+    function renderMessageText(el, text) {
+      let last = 0;
+      for (const match of text.matchAll(LINK_PATTERN)) {
+        el.append(text.slice(last, match.index));
+        const a = document.createElement('a');
+        a.href = match[0]; a.textContent = match[0];
+        a.target = '_blank'; a.rel = 'noopener noreferrer nofollow';
+        el.append(a);
+        last = match.index + match[0].length;
+      }
+      el.append(text.slice(last));
+    }
+
+    // The backend sends at most HISTORY_PAGE messages; fewer means we are looking at the start of the channel
+    const HISTORY_PAGE = 50;
+    function renderChannelIntro() {
+      const server = findServer(currentServer);
+      const channel = server && server.channels.find(c => c.id === currentChannel);
+      if (!channel) return;
+      const li = document.createElement('li'); li.className = 'channel-intro';
+      const icon = document.createElement('div'); icon.className = 'channel-intro-icon'; icon.textContent = '#';
+      const title = document.createElement('h3'); title.textContent = `Welcome to #${channel.name}`;
+      const sub = document.createElement('p'); sub.textContent = `This is the start of the #${channel.name} channel in ${server.name}.`;
+      li.append(icon, title, sub);
+      messagesEl.appendChild(li);
+    }
+
     socket.on('load history', (history) => {
-      messagesEl.innerHTML = ''; history.forEach(appendMessage); scrollToBottom(false);
+      messagesEl.innerHTML = '';
+      if (history.length < HISTORY_PAGE) renderChannelIntro();
+      history.forEach(appendMessage); scrollToBottom(false);
       if (awaitingHistory) finishNav();
     });
     socket.on('chat message', appendMessage);
@@ -1072,6 +1270,7 @@
     input.addEventListener('input', () => {
       const remaining = MAX_LEN - input.value.length;
       if (remaining < 50) { charCounter.textContent = remaining; charCounter.classList.add('visible'); } else { charCounter.classList.remove('visible'); }
+      sendBtn.classList.toggle('ready', input.value.trim().length > 0);
       socket.emit('typing'); clearTimeout(typingTimeout); typingTimeout = setTimeout(() => socket.emit('stop typing'), 1200);
     });
 
@@ -1094,7 +1293,7 @@
       if (!displayName || !text || !currentServer) return;
       // serverId/channelId are hints only; the backend routes by the socket's confirmed location
       socket.emit('chat message', { serverId: currentServer, channelId: currentChannel, text });
-      input.value = ''; charCounter.classList.remove('visible'); clearTimeout(typingTimeout); socket.emit('stop typing'); isNearBottom = true;
+      input.value = ''; charCounter.classList.remove('visible'); sendBtn.classList.remove('ready'); clearTimeout(typingTimeout); socket.emit('stop typing'); isNearBottom = true;
     });
 
     socket.on('rate limited', () => showToast("You're sending messages a bit fast — give it a second."));
@@ -1104,6 +1303,7 @@
     // ==========================================
     renderMe();
     renderAvatarPreview();
+    syncMembersButton();
     if (!username) openEntry('welcome');
     loadServers();
   })();
