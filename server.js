@@ -28,10 +28,10 @@ function channelMap(ids) {
 }
 
 const SERVERS = new Map([
-  ['dit-lounge',  { name: 'DIT Lounge',  passcode: null,      channels: channelMap(['general', 'programming', 'random']) }],
-  ['gaming',      { name: 'Gaming',      passcode: '1234',    channels: channelMap(['general', 'valorant', 'gta']) }],
-  ['study',       { name: 'Study',       passcode: 'dit2026', channels: channelMap(['general']) }],
-  ['programming', { name: 'Programming', passcode: null,      channels: channelMap(['general']) }],
+  ['dit-lounge',  { name: 'DIT Lounge',  icon: '🟢', passcode: null,      channels: channelMap(['general', 'programming', 'random']) }],
+  ['gaming',      { name: 'Gaming',      icon: '🎮', passcode: '1234',    channels: channelMap(['general', 'valorant', 'gta']) }],
+  ['study',       { name: 'Study',       icon: '📚', passcode: 'dit2026', channels: channelMap(['general']) }],
+  ['programming', { name: 'Programming', icon: '💻', passcode: null,      channels: channelMap(['general']) }],
 ]);
 
 // ==========================================
@@ -75,6 +75,17 @@ const connectedUsers = new Map();
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Public navigation metadata for the frontend. Fields are whitelisted: passcodes never leave the backend.
+app.get('/api/servers', (req, res) => {
+  res.json(Array.from(SERVERS, ([id, s]) => ({
+    id,
+    name: s.name,
+    icon: s.icon,
+    isLocked: s.passcode !== null,
+    channels: Array.from(s.channels.values(), (c) => ({ id: c.id, name: c.name })),
+  })));
 });
 
 function timestamp() {

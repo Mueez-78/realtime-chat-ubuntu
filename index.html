@@ -40,12 +40,25 @@
   .server-icon { font-size: 1.5em; }
   .server-name { display: none; font-size: 1.1em; font-weight: 500; }
   .add-server-btn { background: var(--surface); color: var(--accent); } .add-server-btn:hover { background: var(--accent); color: var(--text); }
+  .server-rail { display: flex; flex-direction: column; min-height: 0; }
+  .channel-panel { display: flex; flex-direction: column; min-height: 0; width: 220px; border-left: 1px solid var(--divider); }
+  .channel-panel-header { height: 64px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--divider); flex-shrink: 0; }
+  .channel-server-name { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drawer-close { display: none; background: none; border: none; color: var(--muted); font-size: 1.6em; line-height: 1; cursor: pointer; padding: 4px; } .drawer-close:hover { color: var(--text); }
+  .channel-section-title { padding: 16px 16px 6px; font-size: 0.75em; font-weight: 600; color: var(--muted); text-transform: uppercase; }
+  .channel-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+  .channel-item { width: 100%; background: none; border: none; color: var(--muted); text-align: left; padding: 8px 10px; border-radius: 6px; font-size: 0.95em; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.2s, color 0.2s; }
+  .channel-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+  .channel-item.active { background: rgba(255,255,255,0.1); color: var(--text); font-weight: 500; }
+  .channel-hash { font-size: 1.1em; color: var(--muted); } .channel-item.active .channel-hash { color: var(--accent); }
+  .sidebar-status { padding: 8px; font-size: 0.8em; color: var(--muted); text-align: center; }
+  .sidebar-status button { display: block; margin: 8px auto 0; background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
 
   .main-content { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
   .header { background: var(--surface); padding: 12px 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.2); z-index: 10; flex-shrink: 0; }
   .avatar { width: 40px; height: 40px; background: var(--muted); border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #fff; overflow: hidden; font-size: 1.2em; }
   .header-info { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
-  .header-title { font-weight: 500; font-size: 1.05em; color: var(--text); }
+  .header-title { font-weight: 500; font-size: 1.05em; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .header-status { font-size: 0.8em; color: var(--muted); display: flex; align-items: center; gap: 6px; }
   .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; transition: background 0.3s; } .dot.connecting { background: var(--connecting); animation: pulse 1.5s infinite; } .dot.online { background: var(--online); } .dot.offline { background: var(--offline); }
   @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
@@ -102,10 +115,11 @@
 
   @media screen and (max-width: 768px) {
     .sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 280px; transform: translateX(-100%); padding: 0; } .sidebar.open { transform: translateX(0); } .sidebar-header { display: block; }
+    .channel-panel { order: -1; width: 100%; max-height: 55%; flex-shrink: 0; border-left: none; border-bottom: 1px solid var(--divider); } .drawer-close { display: block; } .server-rail { flex: 1; }
     .server-item { width: 100%; justify-content: flex-start; padding: 10px 16px; border-radius: 8px; height: auto; } .server-item:hover, .server-item.active { border-radius: 8px; } .server-item.active::before { display: none; } .server-name { display: block; margin-left: 16px; }
     .bottom-nav { display: flex; } .header { padding: 10px 12px; gap: 10px; } .avatar { width: 36px; height: 36px; } .message { max-width: 85%; } #messages { padding: 12px 12px 8px; gap: 4px; } form { padding: 8px 10px; gap: 8px; } input { font-size: 16px; padding: 10px 14px; } .emoji-panel { grid-template-columns: repeat(7, 1fr); left: 10px; max-width: 260px; bottom: 120px; } .modal-card { max-width: 88%; padding: 20px; } #toast { bottom: 90px; }
   }
-  @media screen and (min-width: 769px) { .sidebar { width: 72px; padding: 12px 0; } }
+  @media screen and (min-width: 769px) { .sidebar { flex-direction: row; } .server-rail { width: 72px; padding: 12px 0; } .server-rail .server-list { flex: 1; } }
 </style>
 </head>
 <body>
@@ -113,14 +127,24 @@
   <div id="app-container">
     <div id="sidebar-overlay"></div>
     <nav id="server-sidebar" class="sidebar">
-      <div class="sidebar-header">Servers</div>
-      <div class="server-list" id="server-list"></div>
+      <div class="server-rail">
+        <div class="sidebar-header">Servers</div>
+        <div class="server-list" id="server-list"></div>
+      </div>
+      <div class="channel-panel">
+        <div class="channel-panel-header">
+          <span class="channel-server-name" id="channel-server-name"></span>
+          <button type="button" id="close-sidebar-btn" class="drawer-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="channel-section-title">Channels</div>
+        <div class="channel-list" id="channel-list"></div>
+      </div>
     </nav>
     <main class="main-content">
       <div class="header">
-        <div class="avatar" id="header-avatar" title="Server Icon">🟢</div>
+        <div class="avatar" id="header-avatar" title="Server Icon">💬</div>
         <div class="header-info">
-          <div class="header-title" id="header-title">DIT Lounge</div>
+          <div class="header-title" id="header-title">Loading…</div>
           <div class="header-status">
             <span class="dot connecting" id="status-dot"></span>
             <span id="status-text">Connecting…</span>
@@ -215,24 +239,54 @@
 
     const MAX_LEN = 500;
     
-    const servers = [
-      { id: 'dit-lounge', name: 'DIT Lounge', icon: '🟢', isLocked: false },
-      { id: 'gaming', name: 'Gaming', icon: '🎮', isLocked: true },
-      { id: 'study', name: 'Study', icon: '📚', isLocked: true },
-      { id: 'programming', name: 'Programming', icon: '💻', isLocked: false }
-    ];
-    let currentServer = 'dit-lounge';
+    const channelList = document.getElementById('channel-list');
+    const channelServerName = document.getElementById('channel-server-name');
+    const closeSidebarBtn = document.getElementById('close-sidebar-btn');
+
+    // Navigation metadata comes from the backend (GET /api/servers); the frontend keeps no copy of its own
+    let servers = [];
+    let serversState = 'loading'; // 'loading' | 'ready' | 'error'
+    let currentServer = null;
+    let currentChannel = null;
+    let loggedIn = false;
     // Passcodes typed this session (memory only) so a reconnect can rejoin a locked server
     const enteredPasscodes = new Map();
 
+    function findServer(serverId) { return servers.find(s => s.id === serverId); }
+    function defaultServer() { return servers.find(s => !s.isLocked) || servers[0]; }
+
+    function showToast(msg, ms = 2500) {
+      toast.textContent = msg; toast.classList.add('visible');
+      clearTimeout(toastTimeout); toastTimeout = setTimeout(() => toast.classList.remove('visible'), ms);
+    }
+
+    function sidebarStatus(text, withRetry) {
+      const div = document.createElement('div');
+      div.className = 'sidebar-status';
+      div.textContent = text;
+      if (withRetry) {
+        const retry = document.createElement('button');
+        retry.type = 'button'; retry.textContent = 'Retry';
+        retry.addEventListener('click', loadServers);
+        div.appendChild(retry);
+      }
+      return div;
+    }
+
     function renderServers() {
       serverList.innerHTML = '';
+      if (serversState !== 'ready') {
+        serverList.appendChild(sidebarStatus(serversState === 'error' ? 'Unable to load servers.' : 'Loading servers…', serversState === 'error'));
+        return;
+      }
       servers.forEach(s => {
         const btn = document.createElement('button');
         btn.className = `server-item ${s.id === currentServer ? 'active' : ''}`;
         const lockIcon = s.isLocked ? ' 🔒' : '';
         btn.title = s.name + lockIcon;
-        btn.innerHTML = `<div class="server-icon">${s.icon}</div><span class="server-name">${s.name}${lockIcon}</span>`;
+        const icon = document.createElement('div'); icon.className = 'server-icon'; icon.textContent = s.icon;
+        const name = document.createElement('span'); name.className = 'server-name'; name.textContent = s.name + lockIcon;
+        btn.append(icon, name);
         btn.addEventListener('click', () => switchServer(s.id));
         serverList.appendChild(btn);
       });
@@ -242,43 +296,140 @@
       serverList.appendChild(addBtn);
     }
 
-    function switchServer(serverId) {
-      if (serverId === currentServer) return; 
-      const activeServer = servers.find(s => s.id === serverId);
-      let passcode = null;
-      if (activeServer.isLocked) {
-        passcode = prompt(`Pelayan ${activeServer.name} dikunci.\nSila masukkan kod laluan:`);
-        if (passcode === null) {
-          toast.textContent = "Kod laluan salah atau dibatalkan. Akses ditolak!";
-          toast.classList.add('visible');
-          setTimeout(() => toast.classList.remove('visible'), 2500);
-          return;
-        }
+    function renderChannels() {
+      channelList.innerHTML = '';
+      const server = findServer(currentServer);
+      channelServerName.textContent = server ? server.name : '';
+      if (!server) {
+        channelList.appendChild(sidebarStatus(serversState === 'error' ? 'Unable to load servers.' : 'Loading channels…', serversState === 'error'));
+        return;
       }
-      joinServer(serverId, passcode, (ok, error) => {
-        if (!ok) {
-          toast.textContent = error;
-          toast.classList.add('visible');
-          setTimeout(() => toast.classList.remove('visible'), 2500);
-          return;
-        }
-        closeSidebar();
+      server.channels.forEach(c => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `channel-item ${c.id === currentChannel ? 'active' : ''}`;
+        btn.dataset.channelId = c.id;
+        const hash = document.createElement('span'); hash.className = 'channel-hash'; hash.textContent = '#';
+        btn.append(hash, document.createTextNode(c.name));
+        btn.addEventListener('click', () => switchChannel(c.id));
+        channelList.appendChild(btn);
       });
     }
 
-    // The backend validates the server and passcode; the UI only switches once it agrees
-    function joinServer(serverId, passcode, done) {
-      socket.emit('join server', { serverId, passcode }, (res) => {
-        if (!res || !res.ok) return done(false, (res && res.error) || 'Akses ditolak!');
-        if (passcode !== null) enteredPasscodes.set(serverId, passcode);
-        const activeServer = servers.find(s => s.id === serverId);
-        currentServer = serverId;
-        headerTitle.textContent = activeServer.name;
-        headerAvatar.textContent = activeServer.icon;
-        renderServers();
-        messagesEl.innerHTML = '';
-        typingUsers.clear(); renderTypingIndicator();
+    function loadServers() {
+      serversState = 'loading'; renderServers(); renderChannels();
+      fetch('/api/servers')
+        .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(list => {
+          if (!Array.isArray(list) || !list.length) throw new Error('Invalid server list');
+          servers = list; serversState = 'ready';
+          renderServers(); renderChannels();
+          syncLocation();
+        })
+        .catch(() => {
+          serversState = 'error'; renderServers(); renderChannels();
+          headerTitle.textContent = 'Unable to load servers.';
+        });
+    }
+
+    // Navigation requests run one at a time: a join is finished once its history has arrived,
+    // so a slow response can never overwrite a newer selection. The latest click while busy is queued.
+    let navBusy = false; let queuedNav = null; let awaitingHistory = false;
+    function runNav(fn) { if (navBusy) { queuedNav = fn; return; } navBusy = true; fn(); }
+    function finishNav() { navBusy = false; awaitingHistory = false; const next = queuedNav; queuedNav = null; if (next) runNav(next); }
+
+    // Only called once the backend has confirmed the location
+    function applyLocation(serverId, channelId) {
+      const server = findServer(serverId);
+      const channel = server && server.channels.find(c => c.id === channelId);
+      currentServer = serverId; currentChannel = channelId;
+      localStorage.setItem('lastServerId', serverId);
+      localStorage.setItem('lastChannelId', channelId);
+      headerTitle.textContent = server && channel ? `${server.name} · #${channel.name}` : serverId;
+      headerAvatar.textContent = server ? server.icon : '💬';
+      renderServers(); renderChannels();
+      messagesEl.innerHTML = '';
+      clearTimeout(typingTimeout); typingUsers.clear(); renderTypingIndicator();
+    }
+
+    // The backend validates server, channel and passcode; the UI only moves once it agrees
+    function sendJoin(event, payload, done) {
+      socket.emit(event, payload, (res) => {
+        if (!res || !res.ok) { finishNav(); return done(false, (res && res.error) || 'Akses ditolak!'); }
+        applyLocation(res.serverId, res.channelId);
+        awaitingHistory = true;
         done(true);
+      });
+    }
+
+    function joinServer(serverId, passcode, channelId, done) {
+      runNav(() => sendJoin('join server', { serverId, passcode, channelId }, (ok, error) => {
+        if (ok && passcode !== null) enteredPasscodes.set(serverId, passcode);
+        done(ok, error);
+      }));
+    }
+
+    function canNavigate() {
+      if (!socket.connected) { showToast('Reconnecting…'); return false; }
+      if (!loggedIn) { showToast('Sila masukkan nama untuk mula.'); return false; }
+      return true;
+    }
+
+    function askPasscode(server) {
+      return prompt(`Pelayan ${server.name} dikunci.\nSila masukkan kod laluan:`);
+    }
+
+    function switchServer(serverId) {
+      if (serverId === currentServer) return;
+      if (!canNavigate()) return;
+      const activeServer = findServer(serverId);
+      let passcode = null;
+      if (activeServer.isLocked) {
+        passcode = askPasscode(activeServer);
+        if (passcode === null) return showToast("Kod laluan salah atau dibatalkan. Akses ditolak!");
+      }
+      // Server switches land on the backend default channel ('general'); the drawer stays open to pick a channel
+      joinServer(serverId, passcode, undefined, (ok, error) => { if (!ok) showToast(error); });
+    }
+
+    function switchChannel(channelId) {
+      if (channelId === currentChannel && !navBusy) return closeSidebar();
+      if (!canNavigate()) return;
+      runNav(() => {
+        // Resolved when it runs, so a queued click can't target a server we already left
+        const server = findServer(currentServer);
+        if (!server || !server.channels.some(c => c.id === channelId) || channelId === currentChannel) return finishNav();
+        sendJoin('join channel', { serverId: currentServer, channelId }, (ok, error) => {
+          if (!ok) return showToast(error);
+          closeSidebar();
+        });
+      });
+    }
+
+    // Enter (or re-enter after reconnect / profile change) a location once metadata and login are both ready
+    function syncLocation() {
+      if (serversState !== 'ready' || !loggedIn) return;
+      const fallback = defaultServer();
+      let target, channelId, passcode = null;
+
+      if (currentServer && findServer(currentServer)) {
+        target = findServer(currentServer); channelId = currentChannel;
+        passcode = enteredPasscodes.get(target.id) ?? null;
+      } else {
+        target = findServer(localStorage.getItem('lastServerId')) || fallback;
+        const lastChannel = localStorage.getItem('lastChannelId');
+        if (target.channels.some(c => c.id === lastChannel)) channelId = lastChannel;
+        if (target.isLocked) {
+          // A refresh never bypasses the lock: the passcode has to be typed again
+          passcode = enteredPasscodes.get(target.id) ?? askPasscode(target);
+          if (passcode === null) { target = fallback; channelId = undefined; }
+        }
+      }
+
+      joinServer(target.id, passcode, channelId, (ok, error) => {
+        if (ok) return;
+        showToast(error);
+        if (target.id !== fallback.id) joinServer(fallback.id, null, undefined, () => {});
       });
     }
 
@@ -286,7 +437,7 @@
     function closeSidebar() { serverSidebar.classList.remove('open'); sidebarOverlay.classList.remove('visible'); }
     navHome.addEventListener('click', openSidebar);
     sidebarOverlay.addEventListener('click', closeSidebar);
-    renderServers();
+    closeSidebarBtn.addEventListener('click', closeSidebar);
 
     let username = localStorage.getItem('chat_username') || '';
     let password = localStorage.getItem('chat_password') || '';
@@ -365,9 +516,8 @@
     socket.on('login success', () => {
       usernameModal.classList.remove('visible');
       input.disabled = false; sendBtn.disabled = false; input.focus();
-      joinServer(currentServer, enteredPasscodes.get(currentServer) ?? null, (ok) => {
-        if (!ok) joinServer('dit-lounge', null, () => {});
-      });
+      loggedIn = true;
+      syncLocation();
     });
 
     socket.on('connect', () => {
@@ -376,9 +526,14 @@
       if (username) {
         socket.emit('set username', { name: username, password: password, avatar: userAvatar, isNewUser: false });
       }
+      if (serversState === 'error') loadServers();
     });
 
-    socket.on('disconnect', () => { statusDot.className = 'dot offline'; statusText.textContent = 'Reconnecting…'; });
+    socket.on('disconnect', () => {
+      statusDot.className = 'dot offline'; statusText.textContent = 'Reconnecting…';
+      // Pending joins die with the connection; the location is re-entered after the next login success
+      loggedIn = false; navBusy = false; queuedNav = null; awaitingHistory = false;
+    });
     socket.on('user list', (users) => {
       lastKnownUserCount = users.length;
       if (statusDot.classList.contains('online')) statusText.textContent = `${users.length} online`;
@@ -477,7 +632,10 @@
       }
     });
 
-    socket.on('load history', (history) => { messagesEl.innerHTML = ''; history.forEach(appendMessage); scrollToBottom(false); });
+    socket.on('load history', (history) => {
+      messagesEl.innerHTML = ''; history.forEach(appendMessage); scrollToBottom(false);
+      if (awaitingHistory) finishNav();
+    });
     socket.on('chat message', appendMessage);
 
     function renderTypingIndicator() {
@@ -511,8 +669,9 @@
 
     form.addEventListener('submit', (e) => {
       e.preventDefault(); const text = input.value.trim();
-      if (!username || !text) return; 
-      socket.emit('chat message', { serverId: currentServer, text });
+      if (!username || !text || !currentServer) return;
+      // serverId/channelId are hints only; the backend routes by the socket's confirmed location
+      socket.emit('chat message', { serverId: currentServer, channelId: currentChannel, text });
       input.value = ''; charCounter.classList.remove('visible'); clearTimeout(typingTimeout); socket.emit('stop typing'); isNearBottom = true;
     });
 
@@ -520,6 +679,8 @@
       toast.textContent = "You're sending messages a bit fast — give it a second."; toast.classList.add('visible');
       clearTimeout(toastTimeout); toastTimeout = setTimeout(() => toast.classList.remove('visible'), 2500);
     });
+
+    loadServers();
   })();
   </script>
 </body>
