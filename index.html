@@ -57,21 +57,21 @@
 
   /* ---------- Server rail ---------- */
   .server-rail { width: var(--rail-w); flex-shrink: 0; background: var(--bg-app); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
-  .server-list { flex: 1; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; scrollbar-width: none; }
+  .server-list { flex: 1; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; align-items: center; gap: 10px; scrollbar-width: none; }
   .server-list::-webkit-scrollbar { display: none; }
-  .server-item { position: relative; width: 44px; height: 44px; flex-shrink: 0; border: none; padding: 0; border-radius: 12px; background: rgba(255,255,255,0.04); color: var(--muted); display: flex; align-items: center; justify-content: center; transition: background 0.12s, color 0.12s; }
-  .server-item:hover { background: rgba(255,255,255,0.08); color: var(--text-2); }
-  .server-item.active { background: rgba(10,132,255,0.15); color: #fff; }
+  .server-item { position: relative; width: 44px; height: 44px; flex-shrink: 0; border: none; padding: 0; border-radius: 11px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center; transition: background 0.12s, color 0.12s; }
+  .server-item:hover { background: rgba(255,255,255,0.06); color: var(--text-2); }
+  .server-item.active { background: rgba(10,132,255,0.14); color: #fff; }
   .server-item::before { content: ''; position: absolute; left: -13px; top: 50%; width: 4px; height: 0; margin-top: 0; background: var(--text-2); border-radius: 0 3px 3px 0; transition: height 0.12s, margin-top 0.12s; }
   .server-item:hover::before { height: 16px; margin-top: -8px; }
   .server-item.active::before { height: 30px; margin-top: -15px; background: var(--accent); }
   .server-icon { display: flex; align-items: center; justify-content: center; line-height: 1; }
-  .server-icon svg { width: 19px; height: 19px; }
+  .server-icon svg { width: 18px; height: 18px; }
   .server-initial { font-size: 0.95em; font-weight: 600; }
   /* Secondary lock mark, tucked inside the button's bottom-right corner */
-  .server-lock { position: absolute; right: 3px; bottom: 3px; width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; color: var(--faint); }
+  .server-lock { position: absolute; right: 4px; bottom: 4px; width: 10px; height: 10px; display: flex; align-items: center; justify-content: center; color: var(--faint); }
   .server-item.active .server-lock { color: rgba(255,255,255,0.6); }
-  .server-lock svg { width: 11px; height: 11px; stroke-width: 2.2; }
+  .server-lock svg { width: 10px; height: 10px; stroke-width: 2.2; }
   .rail-separator { width: 28px; height: 1px; background: var(--border-strong); flex-shrink: 0; margin: 2px 0; }
   .rail-retry { width: 44px; height: 44px; border-radius: 12px; border: 1px dashed var(--danger); background: none; color: var(--danger); font-size: 1.2em; }
   .add-server-btn { background: transparent; border: 1px dashed var(--border-strong); color: var(--muted); }
@@ -219,7 +219,12 @@
   .lock-status { font-size: 0.82em; color: var(--muted); padding: 2px 0; }
   .icon-choices { display: flex; flex-wrap: wrap; gap: 6px; }
   .icon-choices button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-input); color: var(--muted); display: flex; align-items: center; justify-content: center; padding: 0; transition: border-color 0.12s, background 0.12s, color 0.12s; }
-  .icon-choices button svg { width: 19px; height: 19px; }
+  .icon-choices button svg { width: 18px; height: 18px; }
+  .icon-selected-name { font-size: 0.78em; color: var(--muted); min-height: 1.2em; }
+  .icon-field { display: flex; align-items: center; gap: 12px; }
+  .icon-preview { width: 44px; height: 44px; flex-shrink: 0; border-radius: 11px; background: rgba(10,132,255,0.14); color: #fff; display: flex; align-items: center; justify-content: center; }
+  .icon-preview svg { width: 18px; height: 18px; }
+  .icon-field .icon-preview-text { font-size: 0.82em; color: var(--muted); line-height: 1.35; }
   .icon-choices button:hover { border-color: var(--border-strong); color: var(--text-2); }
   .icon-choices button.selected { border-color: var(--accent); background: var(--accent-soft); color: #fff; }
   .btn-primary { width: 100%; padding: 11px; border: none; border-radius: 8px; background: var(--accent); color: #fff; font-weight: 600; margin-top: 4px; transition: background 0.12s; }
@@ -414,6 +419,7 @@
           <input id="new-server-name" maxlength="32" autocomplete="off" placeholder="e.g. Study Group" required />
           <span class="field-label" id="icon-label">Icon</span>
           <div class="icon-choices" id="icon-choices" role="radiogroup" aria-labelledby="icon-label"></div>
+          <span class="icon-selected-name" id="icon-selected-name" aria-live="polite"></span>
           <label class="field-label" for="new-server-password">Password (optional)</label>
           <input type="password" id="new-server-password" maxlength="64" autocomplete="new-password" />
           <span class="field-hint">Leave empty for an open server anyone can join.</span>
@@ -447,8 +453,11 @@
           <label class="field-label" for="edit-server-name">Server name</label>
           <input id="edit-server-name" maxlength="32" autocomplete="off" required />
           <span class="field-label" id="edit-icon-label">Icon</span>
+          <div class="icon-field">
+            <span class="icon-preview server-icon" id="edit-icon-preview" aria-hidden="true"></span>
+            <span class="icon-preview-text" id="edit-icon-preview-text"></span>
+          </div>
           <div class="icon-choices" id="edit-icon-choices" role="radiogroup" aria-labelledby="edit-icon-label"></div>
-          <span class="field-hint" id="edit-icon-note" hidden>This server uses the DIT Lounge mark.</span>
           <div class="form-error" id="server-edit-error" role="alert"></div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary" data-close-admin>Cancel</button>
@@ -562,7 +571,9 @@
     const serverEditForm = document.getElementById('server-edit-form');
     const editServerName = document.getElementById('edit-server-name');
     const editIconChoices = document.getElementById('edit-icon-choices');
-    const editIconNote = document.getElementById('edit-icon-note');
+    const editIconPreview = document.getElementById('edit-icon-preview');
+    const editIconPreviewText = document.getElementById('edit-icon-preview-text');
+    const iconSelectedName = document.getElementById('icon-selected-name');
     const serverEditError = document.getElementById('server-edit-error');
     const serverEditSubmit = document.getElementById('server-edit-submit');
     const channelRenamePanel = document.getElementById('channel-rename-panel');
@@ -580,17 +591,17 @@
     const MAX_NAME_LEN = 24;
     // ---------- Server icons: one monochrome line-icon family (24×24, stroke = currentColor) ----------
     const LINE_ICONS = {
-      // Product mark for DIT Lounge: a "D" whose lower-left corner hints at a chat-bubble tail
-      monogram: '<path d="M8 5h3.5a7 7 0 0 1 0 14H10l-2 2z"/>',
-      chat: '<path d="M5 7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H10l-5 4z"/>',
+      // DIT Lounge mark: a geometric "D"; the lower-left corner steps down into a small chat-bubble tail
+      monogram: '<path d="M8 18.5v-13h3.5a6.5 6.5 0 0 1 0 13h-1.6L8 20.3z"/>',
+      chat: '<path d="M5.5 7a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2h-5.5l-5.5 3.8z"/>',
       hash: '<path d="M10 5 8.5 19M15.5 5 14 19M6 9.5h13M5 14.5h13"/>',
-      gamepad: '<path d="M8 8h8a4 4 0 0 1 4 4v1.5a2.5 2.5 0 0 1-4.6 1.4L14.6 14H9.4l-.8.9A2.5 2.5 0 0 1 4 13.5V12a4 4 0 0 1 4-4z"/><path d="M8.5 10.5v2.5M7.25 11.75h2.5"/>',
-      book: '<path d="M12 7c-1.8-1.3-4-1.8-7-1.8v12c3 0 5.2.5 7 1.8 1.8-1.3 4-1.8 7-1.8v-12c-3 0-5.2.5-7 1.8z"/><path d="M12 7v12"/>',
-      code: '<path d="m9 8.5-3.5 3.5L9 15.5M15 8.5l3.5 3.5-3.5 3.5"/>',
-      megaphone: '<path d="M5 10v4h2.5L15 18V6l-7.5 4z"/><path d="M7.5 14l1 4"/>',
-      music: '<path d="M9.5 17V7l9-2v10"/><circle cx="7" cy="17" r="2.5"/><circle cx="16" cy="15" r="2.5"/>',
-      trophy: '<path d="M8 5h8v4a4 4 0 0 1-8 0z"/><path d="M12 13v4M9 19h6"/>',
-      palette: '<path d="M12 5a7 7 0 1 0 0 14c1 0 1.4-.8 1-1.6-.4-1 .2-1.9 1.2-1.9H16a3 3 0 0 0 3-3c0-4.3-3.1-7.5-7-7.5z"/>',
+      gamepad: '<path d="M7 7h10a4 4 0 0 1 4 4v3.5a2.5 2.5 0 0 1-4.5 1.5L15 14H9l-1.5 2A2.5 2.5 0 0 1 3 14.5V11a4 4 0 0 1 4-4z"/><path d="M8 9.8v3M6.5 11.3h3M15.5 11.3h.01"/>',
+      book: '<path d="M5 17V6.5a2 2 0 0 1 2-2h12v12H7a2 2 0 0 0 0 4h12v-4"/><path d="M9.5 8.5h5"/>',
+      code: '<path d="M9 7.5 4.5 12 9 16.5M15 7.5l4.5 4.5-4.5 4.5"/>',
+      megaphone: '<path d="M4.5 9.5v5h3L16 19V5L7.5 9.5z"/><path d="M7.5 14.5l1.2 4.5"/>',
+      music: '<path d="M10 16.5V6.5l8.5-2v10"/><circle cx="7.75" cy="16.5" r="2.25"/><circle cx="16.25" cy="14.5" r="2.25"/>',
+      trophy: '<path d="M8 5h8v4.5a4 4 0 0 1-8 0z"/><path d="M8 7H5.5a2.5 2.5 0 0 0 2.6 3M16 7h2.5a2.5 2.5 0 0 1-2.6 3M12 13.5V17M9 19.5h6"/>',
+      palette: '<path d="M12 4.5a7.5 7.5 0 1 0 0 15c1 0 1.5-.8 1.1-1.7-.4-1 .2-2 1.3-2H16a3.5 3.5 0 0 0 3.5-3.5c0-4.4-3.4-7.8-7.5-7.8z"/><path d="M8.5 11h.01M11 7.8h.01M15 8.8h.01"/>',
       flask: '<path d="M10 5h4M11 5v5l-4.5 7.5A1.6 1.6 0 0 0 7.9 20h8.2a1.6 1.6 0 0 0 1.4-2.5L13 10V5"/>',
       cup: '<path d="M6 9h10v4.5a4.5 4.5 0 0 1-4.5 4.5h-1A4.5 4.5 0 0 1 6 13.5z"/><path d="M16 10.5h1a2.5 2.5 0 0 1 0 5h-1"/>',
       moon: '<path d="M18.5 14.5A7 7 0 0 1 9.5 5.5a7 7 0 1 0 9 9z"/>',
@@ -600,7 +611,7 @@
       lock: '<rect x="5.5" y="11" width="13" height="9" rx="2"/><path d="M8.5 11V8.5a3.5 3.5 0 0 1 7 0V11"/>',
     };
     function lineIcon(name) {
-      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LINE_ICONS[name]}</svg>`;
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LINE_ICONS[name]}</svg>`;
     }
     // Servers store a short emoji/text icon (backend data is unchanged); the UI shows the matching line icon.
     const SERVER_ICON_BY_ID = { 'dit-lounge': 'monogram' };
@@ -612,6 +623,7 @@
     // Fills `el` with the server's line icon, or its initial when the stored icon has no line equivalent
     function fillServerIcon(el, server) {
       const name = SERVER_ICON_BY_ID[server.id] || SERVER_ICON_BY_VALUE[server.icon];
+      el.classList.remove('server-initial');
       el.dataset.icon = name || 'initial';
       if (name) { el.innerHTML = lineIcon(name); return; } // static markup
       el.textContent = (server.name || '?').trim().charAt(0).toUpperCase();
@@ -1048,7 +1060,7 @@
     // ==========================================
     // Values are what the backend stores; the picker shows the same line icons the rail will use
     const SERVER_ICONS = ['💬', '🎮', '📚', '💻', '📢', '🎵', '⚽', '🎨', '🧪', '🍔', '🌙', '⭐'];
-    const ICON_LABELS = { chat: 'Chat', gamepad: 'Gaming', book: 'Study', code: 'Code', megaphone: 'Announcements', music: 'Music', trophy: 'Sports', palette: 'Art', flask: 'Science', cup: 'Food & drink', moon: 'Night', star: 'Star' };
+    const ICON_LABELS = { chat: 'Chat', gamepad: 'Gaming', book: 'Study', code: 'Programming', megaphone: 'Announcement', music: 'Music', trophy: 'Trophy', palette: 'Palette', flask: 'Flask', cup: 'Cup', moon: 'Moon', star: 'Star' };
     let selectedIcon = SERVER_ICONS[0];       // Add Server picker
     let editSelectedIcon;                       // Server Settings picker (undefined = keep current icon)
 
@@ -1072,9 +1084,19 @@
     }
     function renderIconChoices() {
       renderIconPicker(iconChoices, selectedIcon, (icon) => { selectedIcon = icon; renderIconChoices(); });
+      iconSelectedName.textContent = ICON_LABELS[SERVER_ICON_BY_VALUE[selectedIcon]];
     }
     function renderEditIconChoices() {
       renderIconPicker(editIconChoices, editSelectedIcon, (icon) => { editSelectedIcon = icon; renderEditIconChoices(); });
+      // Preview with the same renderer the rail uses (so a fixed mark or first-letter fallback shows as it will appear)
+      const server = findServer(currentServer);
+      if (!server) return;
+      const shown = { id: server.id, name: editServerName.value.trim() || server.name, icon: editSelectedIcon === undefined ? server.icon : editSelectedIcon };
+      fillServerIcon(editIconPreview, shown);
+      const key = editIconPreview.dataset.icon;
+      editIconPreviewText.textContent = SERVER_ICON_BY_ID[server.id]
+        ? 'This server uses the DIT Lounge mark.'
+        : (key === 'initial' ? 'Shown as the first letter of the name. Pick an icon below to change it.' : ICON_LABELS[key] || '');
     }
 
     function renderPasswordPanel(selectId) {
@@ -1131,7 +1153,7 @@
         editServerName.value = server.name;
         // Servers with a fixed mark (DIT Lounge) don't use the icon setting
         const fixedMark = !!SERVER_ICON_BY_ID[server.id];
-        editIconChoices.hidden = fixedMark; editIconNote.hidden = !fixedMark;
+        editIconChoices.hidden = fixedMark;
         editSelectedIcon = SERVER_ICONS.includes(server.icon) ? server.icon : undefined;
         renderEditIconChoices();
         focusEl = editServerName;
@@ -1202,6 +1224,7 @@
       });
     });
 
+    editServerName.addEventListener('input', () => { if (!serverEditPanel.hidden) renderEditIconChoices(); });
     renameChannelSelect.addEventListener('change', () => { channelRenameError.textContent = ''; renderRenameChannelPanel(renameChannelSelect.value, true); });
     channelRenameForm.addEventListener('submit', (e) => {
       e.preventDefault();
