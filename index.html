@@ -591,18 +591,15 @@
       currentServer = serverId;
       const activeServer = servers.find(s => s.id === serverId);
       
-      // Update Header
       headerTitle.textContent = activeServer.name;
       headerAvatar.textContent = activeServer.icon;
       
-      // Update UI active state
       renderServers();
       closeSidebar();
 
-      // [PHASE 2 PLACEHOLDER]
-      // In Phase 2, this is where we will tell the backend to switch rooms:
-      // socket.emit('join server', currentServer);
-      // messagesEl.innerHTML = ''; // Clear chat area visually for now
+      // [PHASE 2 DIAKTIFKAN]
+      socket.emit('join server', currentServer);
+      messagesEl.innerHTML = ''; 
     }
 
     // Sidebar Mobile Toggles

@@ -16,23 +16,32 @@ const RATE_LIMIT_WINDOW_MS = 3000;
 const RATE_LIMIT_MAX_MESSAGES = 5;
 
 // ==========================================
-// DATABASE SETUP
+// DATABASE SETUP (FASA 2 - Tambah serverId)
 // ==========================================
 const db = new sqlite3.Database('./chat.db', (err) => {
   if (err) console.error('🔴 Failed to open database:', err.message);
-  else console.log('📁 SQLite Database (chat.db) connected successfully.');
+  else {
+    console.log('📁 SQLite Database (chat.db) connected successfully.');
+    
+    // Cipta jadual dengan lajur baharu serverId
+    db.run(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user TEXT,
+        avatar TEXT,
+        text TEXT,
+        time TEXT,
+        serverId TEXT DEFAULT 'dit-lounge'
+      )
+    `, (err) => {
+      // Baris ini secara automatik menambah lajur serverId ke pangkalan data lama awak
+      // tanpa memadamkan mesej-mesej Lobi Utama yang sedia ada.
+      if (!err) {
+        db.run(`ALTER TABLE messages ADD COLUMN serverId TEXT DEFAULT 'dit-lounge'`, () => {});
+      }
+    });
+  }
 });
-
-// Create table if it doesn't exist
-db.run(`
-  CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user TEXT,
-    avatar TEXT,
-    text TEXT,
-    time TEXT
-  )
-`);
 
 const connectedUsers = new Map(); 
 
@@ -61,20 +70,6 @@ function isRateLimited(user) {
 io.on('connection', (socket) => {
   console.log(`🟢 Socket connected: ${socket.id}`);
 
-  // FETCH CHAT HISTORY FROM DATABASE
-  db.all(
-    `SELECT user, avatar, text, time FROM messages ORDER BY id DESC LIMIT ?`,
-    [MAX_HISTORY],
-    (err, rows) => {
-      if (err) {
-        console.error('Database read error:', err);
-        return;
-      }
-      const history = rows.reverse();
-      socket.emit('load history', history);
-    }
-  );
-
   socket.on('set username', (data) => {
     if (!data) return;
 
@@ -89,8 +84,39 @@ io.on('connection', (socket) => {
       avatar = data.avatar;
     }
 
-    connectedUsers.set(socket.id, { username, avatar, messageTimestamps: [] });
+    connectedUsers.set(socket.id, { username, avatar, messageTimestamps: [], currentServer: 'dit-lounge' });
     broadcastUserList();
+  });
+
+  // ==========================================
+  // FASA 2: LOGIK PERTUKARAN PELAYAN (ROOMS)
+  // ==========================================
+  socket.on('join server', (serverId) => {
+    const user = connectedUsers.get(socket.id);
+    if (!user) return;
+
+    // Keluar dari semua bilik lain terlebih dahulu (kecuali ID sendiri)
+    socket.rooms.forEach(room => {
+      if (room !== socket.id) socket.leave(room);
+    });
+
+    // Masuk ke bilik pelayan yang dipilih
+    socket.join(serverId);
+    user.currentServer = serverId;
+
+    // Ambil sejarah mesej HANYA untuk bilik ini
+    db.all(
+      `SELECT user, avatar, text, time FROM messages WHERE serverId = ? ORDER BY id DESC LIMIT ?`,
+      [serverId, MAX_HISTORY],
+      (err, rows) => {
+        if (err) {
+          console.error('Database read error:', err);
+          return;
+        }
+        const history = rows.reverse();
+        socket.emit('load history', history);
+      }
+    );
   });
 
   socket.on('chat message', (data) => {
@@ -105,6 +131,9 @@ io.on('connection', (socket) => {
     const text = String((data && data.text) || '').trim().slice(0, MAX_MESSAGE_LENGTH);
     if (!text) return;
 
+    // Guna ID pelayan yang dihantar, jika tiada, guna pelayan semasa pengguna
+    const serverId = data.serverId || user.currentServer || 'dit-lounge';
+
     const messageData = { 
       user: user.username, 
       avatar: user.avatar,
@@ -112,10 +141,10 @@ io.on('connection', (socket) => {
       time: timestamp() 
     };
     
-    // SAVE NEW MESSAGE TO DATABASE
+    // SIMPAN MESEJ BERSAMA ID PELAYAN (SERVER ID)
     db.run(
-      `INSERT INTO messages (user, avatar, text, time) VALUES (?, ?, ?, ?)`,
-      [messageData.user, messageData.avatar, messageData.text, messageData.time],
+      `INSERT INTO messages (user, avatar, text, time, serverId) VALUES (?, ?, ?, ?, ?)`,
+      [messageData.user, messageData.avatar, messageData.text, messageData.time, serverId],
       function(err) {
         if (err) console.error('Error saving message:', err.message);
       }
@@ -123,17 +152,23 @@ io.on('connection', (socket) => {
 
     db.run(`DELETE FROM messages WHERE id NOT IN (SELECT id FROM messages ORDER BY id DESC LIMIT 100)`);
 
-    io.emit('chat message', messageData);
+    // Pancarkan mesej ini HANYA kepada pengguna di dalam bilik yang sama
+    io.to(serverId).emit('chat message', messageData);
   });
 
+  // Pastikan isyarat 'menaip' tidak menembusi ke pelayan lain
   socket.on('typing', () => {
     const user = connectedUsers.get(socket.id);
-    if (user && user.username) socket.broadcast.emit('typing', user.username);
+    if (user && user.username && user.currentServer) {
+      socket.to(user.currentServer).emit('typing', user.username);
+    }
   });
 
   socket.on('stop typing', () => {
     const user = connectedUsers.get(socket.id);
-    if (user && user.username) socket.broadcast.emit('stop typing', user.username);
+    if (user && user.username && user.currentServer) {
+      socket.to(user.currentServer).emit('stop typing', user.username);
+    }
   });
 
   socket.on('disconnect', () => {
