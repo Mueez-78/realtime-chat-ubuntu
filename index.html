@@ -726,6 +726,7 @@
       input.focus();
       
       socket.emit('set username', { name: username, avatar: userAvatar, isNewUser: true });
+      socket.emit('join server', currentServer);
     }
 
     if (!username) showUsernameModal();
@@ -746,6 +747,7 @@
       
       if (username) {
         socket.emit('set username', { name: username, avatar: userAvatar, isNewUser: false });
+        socket.emit('join server', currentServer);
       }
     });
 
@@ -918,18 +920,15 @@
     }
 
     // ---- Send Message ----
+    // ---- Send Message ----
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const text = input.value.trim();
       
       if (!username || !text) return; 
 
-      // [PHASE 2 PLACEHOLDER]
-      // In Phase 2, this will send the serverId to the backend:
-      // socket.emit('chat message', { serverId: currentServer, text });
-      
-      // Current Phase 1 behaviour (Global broadcast):
-      socket.emit('chat message', { text });
+      // [PHASE 2 DIAKTIFKAN] - Hantar mesej ke spesifik server
+      socket.emit('chat message', { serverId: currentServer, text });
       
       input.value = '';
       charCounter.classList.remove('visible');
