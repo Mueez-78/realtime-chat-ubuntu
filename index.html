@@ -22,6 +22,7 @@
     --offline: #f15c5c;
     --divider: rgba(255,255,255,0.1);
   }
+
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
 
@@ -554,12 +555,12 @@
 
     const MAX_LEN = 500;
     
-    // --- FRONTEND MULTI-SERVER ARCHITECTURE ---
+    // --- FRONTEND MULTI-SERVER ARCHITECTURE & PASSCODE ---
     const servers = [
-      { id: 'dit-lounge', name: 'DIT Lounge', icon: '🟢' },
-      { id: 'gaming', name: 'Gaming', icon: '🎮' },
-      { id: 'study', name: 'Study', icon: '📚' },
-      { id: 'programming', name: 'Programming', icon: '💻' }
+      { id: 'dit-lounge', name: 'DIT Lounge', icon: '🟢', isLocked: false, passcode: null },
+      { id: 'gaming', name: 'Gaming', icon: '🎮', isLocked: true, passcode: '1234' },
+      { id: 'study', name: 'Study', icon: '📚', isLocked: true, passcode: 'dit2026' },
+      { id: 'programming', name: 'Programming', icon: '💻', isLocked: false, passcode: null }
     ];
     let currentServer = 'dit-lounge';
 
@@ -568,16 +569,18 @@
       servers.forEach(s => {
         const btn = document.createElement('button');
         btn.className = `server-item ${s.id === currentServer ? 'active' : ''}`;
-        btn.title = s.name;
+        
+        const lockIcon = s.isLocked ? ' 🔒' : '';
+        btn.title = s.name + lockIcon;
+        
         btn.innerHTML = `
           <div class="server-icon">${s.icon}</div>
-          <span class="server-name">${s.name}</span>
+          <span class="server-name">${s.name}${lockIcon}</span>
         `;
         btn.addEventListener('click', () => switchServer(s.id));
         serverList.appendChild(btn);
       });
 
-      // Add a dummy 'Add Server' button
       const addBtn = document.createElement('button');
       addBtn.className = 'server-item add-server-btn';
       addBtn.innerHTML = `
@@ -588,8 +591,22 @@
     }
 
     function switchServer(serverId) {
-      currentServer = serverId;
+      if (serverId === currentServer) return; 
+
       const activeServer = servers.find(s => s.id === serverId);
+      
+      // LOGIK KOD LALUAN
+      if (activeServer.isLocked) {
+        const userInput = prompt(`Pelayan ${activeServer.name} dikunci.\nSila masukkan kod laluan:`);
+        if (userInput !== activeServer.passcode) {
+          toast.textContent = "Kod laluan salah atau dibatalkan. Akses ditolak!";
+          toast.classList.add('visible');
+          setTimeout(() => toast.classList.remove('visible'), 2500);
+          return; 
+        }
+      }
+
+      currentServer = serverId;
       
       headerTitle.textContent = activeServer.name;
       headerAvatar.textContent = activeServer.icon;
@@ -597,7 +614,7 @@
       renderServers();
       closeSidebar();
 
-      // [PHASE 2 DIAKTIFKAN]
+      // [PHASE 2 DIAKTIFKAN] - Maklumkan server untuk tukar Room
       socket.emit('join server', currentServer);
       messagesEl.innerHTML = ''; 
     }
@@ -618,7 +635,6 @@
 
     // Initialize Server UI
     renderServers();
-
     // --- END SERVER LOGIC ---
 
     let username = localStorage.getItem('chat_username') || '';
@@ -726,7 +742,7 @@
       input.focus();
       
       socket.emit('set username', { name: username, avatar: userAvatar, isNewUser: true });
-      socket.emit('join server', currentServer);
+      socket.emit('join server', currentServer); 
     }
 
     if (!username) showUsernameModal();
@@ -747,7 +763,7 @@
       
       if (username) {
         socket.emit('set username', { name: username, avatar: userAvatar, isNewUser: false });
-        socket.emit('join server', currentServer);
+        socket.emit('join server', currentServer); 
       }
     });
 
@@ -919,7 +935,6 @@
       field.setSelectionRange(pos, pos);
     }
 
-    // ---- Send Message ----
     // ---- Send Message ----
     form.addEventListener('submit', (e) => {
       e.preventDefault();
