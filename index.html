@@ -4,11 +4,12 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="theme-color" content="#0b141a" />
-<title>Late Night Chat</title>
+<title>DIT Chat</title>
 <style>
   :root {
     --bg-main: #0b141a;
     --surface: #202c33;
+    --surface-darker: #111b21;
     --input-bg: #2a3942;
     --accent: #00a884;
     --accent-hover: #008f6f;
@@ -19,6 +20,7 @@
     --online: #00a884;
     --connecting: #ffb74d;
     --offline: #f15c5c;
+    --divider: rgba(255,255,255,0.1);
   }
 
   * { box-sizing: border-box; }
@@ -29,16 +31,120 @@
     background: var(--bg-main);
     color: var(--text);
     display: flex;
-    flex-direction: column;
     height: 100vh;
     height: 100dvh;
     overflow: hidden;
   }
 
+  /* Layout Containers */
+  #app-container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Server Sidebar (Desktop & Drawer on Mobile) */
+  .sidebar {
+    background: var(--surface-darker);
+    display: flex;
+    flex-direction: column;
+    z-index: 40;
+    transition: transform 0.3s ease;
+    border-right: 1px solid var(--divider);
+  }
+  
+  .sidebar-header {
+    padding: 16px;
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 0.85em;
+    text-transform: uppercase;
+    display: none; /* Only show on mobile drawer */
+  }
+
+  .server-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .server-list::-webkit-scrollbar { width: 4px; }
+  .server-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+  .server-item {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    border-radius: 50%;
+    padding: 0;
+    width: 48px;
+    height: 48px;
+    justify-content: center;
+    transition: all 0.2s ease;
+    color: var(--text);
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .server-item:hover {
+    background: var(--surface);
+    border-radius: 16px;
+  }
+
+  .server-item.active {
+    background: var(--accent);
+    border-radius: 16px;
+  }
+
+  .server-item.active::before {
+    content: '';
+    position: absolute;
+    left: -12px;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 32px;
+    width: 4px;
+    background: var(--text);
+    border-radius: 0 4px 4px 0;
+  }
+
+  .server-icon {
+    font-size: 1.5em;
+  }
+
+  .server-name {
+    display: none; /* Hidden on desktop sidebar */
+    font-size: 1.1em;
+    font-weight: 500;
+  }
+
+  .add-server-btn {
+    background: var(--surface);
+    color: var(--accent);
+  }
+  .add-server-btn:hover {
+    background: var(--accent);
+    color: var(--text);
+  }
+
+  /* Main Chat Area Container */
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    position: relative;
+  }
+
   /* Header */
   .header {
     background: var(--surface);
-    padding: 10px 16px;
+    padding: 12px 16px;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -51,7 +157,7 @@
     background: var(--muted);
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0; color: #fff; overflow: hidden;
+    flex-shrink: 0; color: #fff; overflow: hidden; font-size: 1.2em;
   }
   .header-info { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
   .header-title { font-weight: 500; font-size: 1.05em; color: var(--text); }
@@ -154,6 +260,7 @@
   form {
     display: flex; align-items: center; padding: 10px 16px;
     background: var(--surface); gap: 10px; flex-shrink: 0; position: relative;
+    border-top: 1px solid var(--divider);
   }
   .icon-btn {
     background: none; border: none; font-size: 1.4em; color: var(--muted);
@@ -187,6 +294,27 @@
   .emoji-panel button { background: none; border: none; font-size: 1.3em; cursor: pointer; padding: 4px; border-radius: 4px; }
   .emoji-panel button:hover { background: rgba(255,255,255,0.05); }
 
+  /* Bottom Mobile Nav */
+  .bottom-nav {
+    display: none;
+    background: var(--surface-darker);
+    padding: 12px 0;
+    border-top: 1px solid var(--divider);
+    z-index: 30;
+  }
+  .nav-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 1.4em;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  .nav-btn:hover, .nav-btn.active {
+    color: var(--text);
+  }
+
   /* Modals & Toasts */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(11, 20, 26, 0.85);
@@ -205,7 +333,6 @@
     position: relative;
   }
 
-  /* Close Button */
   .close-btn {
     position: absolute; 
     top: 10px; 
@@ -219,7 +346,6 @@
   }
   .close-btn:hover { color: var(--text); }
 
-  /* Avatar Preview */
   #avatar-preview {
     width: 80px; 
     height: 80px; 
@@ -235,19 +361,9 @@
   }
   #avatar-preview span { font-size: 24px; }
 
-  /* Vertical Form Layout */
-  #username-form {
-    display: flex; 
-    flex-direction: column; 
-    gap: 12px; 
-    margin-top: 16px;
-  }
+  #username-form { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
   #username-form input, #username-form button {
-    width: 100%; 
-    padding: 12px; 
-    border-radius: 6px; 
-    border: none; 
-    font-size: 1em;
+    width: 100%; padding: 12px; border-radius: 6px; border: none; font-size: 1em;
   }
   #username-form input { background: var(--input-bg); color: white; }
   #username-form button { background: var(--accent); color: white; font-weight: 600; cursor: pointer; transition: background 0.2s; }
@@ -260,59 +376,124 @@
   }
   #toast.visible { opacity: 1; }
 
+  /* Mobile Drawer Overlay */
+  #sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 35;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  #sidebar-overlay.visible {
+    display: block;
+    opacity: 1;
+  }
+
   /* =========================================
      RESPONSIVE DESIGN (MOBILE SPECIFIC)
      ========================================= */
-  @media screen and (max-width: 600px) {
+  @media screen and (max-width: 768px) {
+    .sidebar { 
+      position: fixed; 
+      left: 0; top: 0; bottom: 0; 
+      width: 280px; 
+      transform: translateX(-100%);
+      padding: 0;
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-header { display: block; }
+    
+    .server-item { width: 100%; justify-content: flex-start; padding: 10px 16px; border-radius: 8px; height: auto; }
+    .server-item:hover, .server-item.active { border-radius: 8px; }
+    .server-item.active::before { display: none; }
+    .server-name { display: block; margin-left: 16px; }
+    
+    .bottom-nav { display: flex; }
+    
     .header { padding: 10px 12px; gap: 10px; }
     .avatar { width: 36px; height: 36px; }
     .message { max-width: 85%; }
     #messages { padding: 12px 12px 8px; gap: 4px; }
     form { padding: 8px 10px; gap: 8px; }
     input { font-size: 16px; padding: 10px 14px; }
-    .emoji-panel { grid-template-columns: repeat(7, 1fr); left: 10px; max-width: 260px; }
+    .emoji-panel { grid-template-columns: repeat(7, 1fr); left: 10px; max-width: 260px; bottom: 120px; }
     .modal-card { max-width: 88%; padding: 20px; }
+    #toast { bottom: 90px; }
+  }
+  
+  @media screen and (min-width: 769px) {
+    .sidebar { width: 72px; padding: 12px 0; }
   }
 </style>
 </head>
 <body>
 
-  <div class="header">
-    <div class="avatar" title="Group Profile">🐧</div>
-    <div class="header-info">
-      <div class="header-title">DIT Live Lounge</div>
-      <div class="header-status">
-        <span class="dot connecting" id="status-dot"></span>
-        <span id="status-text">Connecting…</span>
+  <div id="app-container">
+    
+    <!-- Mobile Overlay for Sidebar -->
+    <div id="sidebar-overlay"></div>
+
+    <!-- Server Sidebar / Mobile Drawer -->
+    <nav id="server-sidebar" class="sidebar">
+      <div class="sidebar-header">Servers</div>
+      <div class="server-list" id="server-list">
+        <!-- Servers rendered via JS -->
       </div>
-    </div>
-    <button id="edit-profile-btn" class="settings-btn" title="Edit Profile">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
-        <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
-      </svg>
-    </button>
+    </nav>
+
+    <!-- Main Chat Content -->
+    <main class="main-content">
+      
+      <div class="header">
+        <div class="avatar" id="header-avatar" title="Server Icon">🟢</div>
+        <div class="header-info">
+          <div class="header-title" id="header-title">DIT Lounge</div>
+          <div class="header-status">
+            <span class="dot connecting" id="status-dot"></span>
+            <span id="status-text">Connecting…</span>
+          </div>
+        </div>
+        <button id="edit-profile-btn" class="settings-btn" title="Edit Profile">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+            <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.06-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.73,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.06,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.43-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="chat-area">
+        <ul id="messages"></ul>
+        <button class="scroll-bottom-btn" id="scroll-bottom-btn" type="button">↓</button>
+        <div id="typing-indicator"></div>
+      </div>
+
+      <form id="form">
+        <button type="button" id="emoji-btn" class="icon-btn" aria-label="Add emoji">😊</button>
+        <input id="input" autocomplete="off" maxlength="500" placeholder="Type a message…" disabled required />
+        <span id="char-counter"></span>
+        
+        <button type="submit" id="send-btn" class="send-btn" aria-label="Send message" disabled>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="white" style="transform: translateX(-1px);">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+        
+        <div class="emoji-panel" id="emoji-panel"></div>
+      </form>
+
+      <!-- Bottom Navigation for Mobile -->
+      <nav class="bottom-nav">
+        <button id="nav-home" class="nav-btn active" title="Servers">🏠</button>
+        <button class="nav-btn" title="Search">🔍</button>
+        <button class="nav-btn" title="Add">➕</button>
+        <button id="nav-profile" class="nav-btn" title="Profile">👤</button>
+      </nav>
+
+    </main>
   </div>
 
-  <div class="chat-area">
-    <ul id="messages"></ul>
-    <button class="scroll-bottom-btn" id="scroll-bottom-btn" type="button">↓</button>
-    <div id="typing-indicator"></div>
-  </div>
-
-  <form id="form">
-    <button type="button" id="emoji-btn" class="icon-btn" aria-label="Add emoji">😊</button>
-    <input id="input" autocomplete="off" maxlength="500" placeholder="Type a message…" disabled required />
-    <span id="char-counter"></span>
-    
-    <button type="submit" id="send-btn" class="send-btn" aria-label="Send message" disabled>
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="white" style="transform: translateX(-1px);">
-        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-      </svg>
-    </button>
-    
-    <div class="emoji-panel" id="emoji-panel"></div>
-  </form>
-
+  <!-- Profile / Username Modal -->
   <div class="modal-overlay" id="username-modal">
     <div class="modal-card">
       <button id="close-modal-btn" class="close-btn" aria-label="Close">&times;</button>
@@ -339,6 +520,7 @@
   (function () {
     const socket = io();
 
+    // Elements
     const messagesEl = document.getElementById('messages');
     const form = document.getElementById('form');
     const input = document.getElementById('input');
@@ -349,7 +531,16 @@
     const typingIndicator = document.getElementById('typing-indicator');
     const scrollBtn = document.getElementById('scroll-bottom-btn');
     
-    // Modal & Profile
+    // Header & Server UI Elements
+    const headerTitle = document.getElementById('header-title');
+    const headerAvatar = document.getElementById('header-avatar');
+    const serverSidebar = document.getElementById('server-sidebar');
+    const serverList = document.getElementById('server-list');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+    const navHome = document.getElementById('nav-home');
+    const navProfile = document.getElementById('nav-profile');
+
+    // Modal & Profile Elements
     const usernameModal = document.getElementById('username-modal');
     const usernameInput = document.getElementById('username-input');
     const usernameForm = document.getElementById('username-form');
@@ -364,6 +555,76 @@
 
     const MAX_LEN = 500;
     
+    // --- FRONTEND MULTI-SERVER ARCHITECTURE ---
+    const servers = [
+      { id: 'dit-lounge', name: 'DIT Lounge', icon: '🟢' },
+      { id: 'gaming', name: 'Gaming', icon: '🎮' },
+      { id: 'study', name: 'Study', icon: '📚' },
+      { id: 'programming', name: 'Programming', icon: '💻' }
+    ];
+    let currentServer = 'dit-lounge';
+
+    function renderServers() {
+      serverList.innerHTML = '';
+      servers.forEach(s => {
+        const btn = document.createElement('button');
+        btn.className = `server-item ${s.id === currentServer ? 'active' : ''}`;
+        btn.title = s.name;
+        btn.innerHTML = `
+          <div class="server-icon">${s.icon}</div>
+          <span class="server-name">${s.name}</span>
+        `;
+        btn.addEventListener('click', () => switchServer(s.id));
+        serverList.appendChild(btn);
+      });
+
+      // Add a dummy 'Add Server' button
+      const addBtn = document.createElement('button');
+      addBtn.className = 'server-item add-server-btn';
+      addBtn.innerHTML = `
+        <div class="server-icon">➕</div>
+        <span class="server-name">Add Server</span>
+      `;
+      serverList.appendChild(addBtn);
+    }
+
+    function switchServer(serverId) {
+      currentServer = serverId;
+      const activeServer = servers.find(s => s.id === serverId);
+      
+      // Update Header
+      headerTitle.textContent = activeServer.name;
+      headerAvatar.textContent = activeServer.icon;
+      
+      // Update UI active state
+      renderServers();
+      closeSidebar();
+
+      // [PHASE 2 PLACEHOLDER]
+      // In Phase 2, this is where we will tell the backend to switch rooms:
+      // socket.emit('join server', currentServer);
+      // messagesEl.innerHTML = ''; // Clear chat area visually for now
+    }
+
+    // Sidebar Mobile Toggles
+    function openSidebar() {
+      serverSidebar.classList.add('open');
+      sidebarOverlay.classList.add('visible');
+    }
+    
+    function closeSidebar() {
+      serverSidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('visible');
+    }
+
+    navHome.addEventListener('click', openSidebar);
+    sidebarOverlay.addEventListener('click', closeSidebar);
+
+    // Initialize Server UI
+    renderServers();
+
+    // --- END SERVER LOGIC ---
+
     let username = localStorage.getItem('chat_username') || '';
     let userAvatar = localStorage.getItem('chat_avatar') || null;
     let lastKnownUserCount = 0;
@@ -427,35 +688,36 @@
       }
     });
 
-    // Open Settings Modal
-    editProfileBtn.addEventListener('click', () => {
-      usernameInput.value = username;
-      showUsernameModal();
-    });
-
-    // BUG FIX: Unlock the input and send button when closing the modal manually
-    closeModalBtn.addEventListener('click', () => {
-      if (username) {
-        usernameModal.classList.remove('visible');
-        
-        // Re-enable typing immediately
-        input.disabled = false;
-        sendBtn.disabled = false;
-        input.focus();
-        
-      } else {
-        toast.textContent = "Please enter a name to start chatting.";
-        toast.classList.add('visible');
-        setTimeout(() => toast.classList.remove('visible'), 2500);
-      }
-    });
-
+    // Profile Modals
     function showUsernameModal() {
       usernameModal.classList.add('visible');
       input.disabled = true;
       sendBtn.disabled = true;
       usernameInput.focus();
     }
+
+    editProfileBtn.addEventListener('click', () => {
+      usernameInput.value = username;
+      showUsernameModal();
+    });
+
+    navProfile.addEventListener('click', () => {
+      usernameInput.value = username;
+      showUsernameModal();
+    });
+
+    closeModalBtn.addEventListener('click', () => {
+      if (username) {
+        usernameModal.classList.remove('visible');
+        input.disabled = false;
+        sendBtn.disabled = false;
+        input.focus();
+      } else {
+        toast.textContent = "Please enter a name to start chatting.";
+        toast.classList.add('visible');
+        setTimeout(() => toast.classList.remove('visible'), 2500);
+      }
+    });
 
     function joinChat(name) {
       username = name;
@@ -470,12 +732,8 @@
       socket.emit('set username', { name: username, avatar: userAvatar, isNewUser: true });
     }
 
-    if (!username) {
-      showUsernameModal();
-    } else {
-      input.disabled = false;
-      sendBtn.disabled = false;
-    }
+    if (!username) showUsernameModal();
+    else { input.disabled = false; sendBtn.disabled = false; }
 
     usernameForm.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -670,7 +928,13 @@
       
       if (!username || !text) return; 
 
+      // [PHASE 2 PLACEHOLDER]
+      // In Phase 2, this will send the serverId to the backend:
+      // socket.emit('chat message', { serverId: currentServer, text });
+      
+      // Current Phase 1 behaviour (Global broadcast):
       socket.emit('chat message', { text });
+      
       input.value = '';
       charCounter.classList.remove('visible');
       clearTimeout(typingTimeout);
