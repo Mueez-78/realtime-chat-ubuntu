@@ -103,6 +103,14 @@ function migrateDatabase(done) {
         db.run(`UPDATE messages SET channelId = ? WHERE channelId IS NULL`, [DEFAULT_CHANNEL]);
         db.run(`CREATE INDEX IF NOT EXISTS idx_messages_channel ON messages (serverId, channelId, id)`);
 
+        // Soft delete (Phase 8): existing rows are untouched -- new columns default to NULL, which means
+        // "not deleted". `ownerToken` is never sent to any client; it only lets the backend recognize
+        // "this connection sent this message" without trusting a client-supplied id (see registerUser()).
+        // Rows written before this migration have ownerToken = NULL, so only an admin can delete them.
+        if (!names.has('deletedAt')) db.run(`ALTER TABLE messages ADD COLUMN deletedAt TEXT`);
+        if (!names.has('deletedBy')) db.run(`ALTER TABLE messages ADD COLUMN deletedBy TEXT`);
+        if (!names.has('ownerToken')) db.run(`ALTER TABLE messages ADD COLUMN ownerToken TEXT`);
+
         // Server/channel registry (Phase 5). passcodeHash NULL = open server.
         db.run(`
           CREATE TABLE IF NOT EXISTS servers (
@@ -205,17 +213,64 @@ function getChannelRoom(serverId, channelId) {
   return `${serverId}:${channelId}`;
 }
 
+// Builds the payload a given recipient is allowed to see for one message row. A deleted message's
+// original text, author and avatar only ever reach an admin socket; everyone else gets nothing but
+// { id, deleted: true } -- not an empty string or a redacted copy, nothing at all (so there is nothing
+// to inspect client-side even via devtools). This shaping happens here, server-side, rather than
+// sending the real content to everyone and hiding it in the UI, which is the actual security requirement.
+function shapeMessageForRecipient(row, isAdminRecipient) {
+  if (!row.deletedAt) return { id: row.id, user: row.user, avatar: row.avatar, time: row.time, isAdmin: row.user === ADMIN_USERNAME, text: row.text };
+  if (isAdminRecipient) {
+    return {
+      id: row.id, user: row.user, avatar: row.avatar, time: row.time, isAdmin: row.user === ADMIN_USERNAME,
+      text: row.text, deleted: true, deletedAt: row.deletedAt, deletedBy: row.deletedBy,
+    };
+  }
+  return { id: row.id, deleted: true };
+}
+
 function sendChannelHistory(socket, serverId, channelId) {
-  // 'id' is included so the frontend can address messages for deletion
+  const recipient = connectedUsers.get(socket.id);
+  const isAdminRecipient = !!(recipient && recipient.isAdmin);
+  // 'id' is included so the frontend can address messages for deletion; ownerToken never leaves the backend
   db.all(
-    `SELECT id, user, avatar, text, time FROM messages WHERE serverId = ? AND channelId = ? ORDER BY id DESC LIMIT ?`,
+    `SELECT id, user, avatar, text, time, deletedAt, deletedBy FROM messages WHERE serverId = ? AND channelId = ? ORDER BY id DESC LIMIT ?`,
     [serverId, channelId, MAX_HISTORY],
     (err, rows) => {
       if (err) return console.error('Database read error:', err);
-      // The admin name is reserved, so it alone identifies admin messages (lets the UI badge them without knowing the name)
-      socket.emit('load history', rows.reverse().map((row) => ({ ...row, isAdmin: row.user === ADMIN_USERNAME })));
+      socket.emit('load history', rows.reverse().map((row) => shapeMessageForRecipient(row, isAdminRecipient)));
     }
   );
+}
+
+// Re-sends 'load history' to every socket currently in a channel room, each shaped for that socket's
+// own admin status. Used after a bulk ("delete all") soft-delete instead of a per-message diff, since
+// the room's whole view changed at once and MAX_HISTORY is small (cheap to just resend per viewer).
+function broadcastChannelHistory(serverId, channelId) {
+  const room = getChannelRoom(serverId, channelId);
+  const socketIds = io.sockets.adapter.rooms.get(room);
+  if (!socketIds) return;
+  for (const socketId of socketIds) {
+    const targetSocket = io.sockets.sockets.get(socketId);
+    if (targetSocket) sendChannelHistory(targetSocket, serverId, channelId);
+  }
+}
+
+// Realtime fan-out for a single soft-deleted message, shaped per recipient the same way history is:
+// admins in the room get the original text plus who/when, everyone else just learns it was deleted.
+function broadcastMessageDeleted(serverId, channelId, msgId, text, deletedAt, deletedBy) {
+  const room = getChannelRoom(serverId, channelId);
+  const socketIds = io.sockets.adapter.rooms.get(room);
+  if (!socketIds) return;
+  for (const socketId of socketIds) {
+    const targetSocket = io.sockets.sockets.get(socketId);
+    if (!targetSocket) continue;
+    const recipient = connectedUsers.get(socketId);
+    const payload = (recipient && recipient.isAdmin)
+      ? { id: msgId, deleted: true, deletedAt, deletedBy, text }
+      : { id: msgId, deleted: true };
+    targetSocket.emit('message deleted', payload);
+  }
 }
 
 function sanitizeUsername(raw) {
@@ -441,8 +496,11 @@ io.on('connection', (socket) => {
       Object.assign(existing, { username, avatar, isAdmin });
       broadcastUserList(existing.currentServer);
     } else {
-      // currentServer/currentChannel stay null until a validated 'join server'
-      connectedUsers.set(socket.id, { username, avatar, isAdmin, messageTimestamps: [], currentServer: null, currentChannel: null });
+      // currentServer/currentChannel stay null until a validated 'join server'. ownerToken is set once
+      // per connection (not reset by later renames/admin-login/'switch to guest' on the same socket) --
+      // it is how the backend recognizes "this connection sent this message" for self-delete, and is
+      // never sent to any client.
+      connectedUsers.set(socket.id, { username, avatar, isAdmin, ownerToken: crypto.randomUUID(), messageTimestamps: [], currentServer: null, currentChannel: null });
     }
 
     // Tell the frontend the sign-in succeeded, with the confirmed identity
@@ -593,10 +651,12 @@ io.on('connection', (socket) => {
       time: timestamp() 
     };
     
-    // Save the message, then broadcast it with its new id
+    // Save the message, then broadcast it with its new id. ownerToken is this connection's own token
+    // (never anything client-supplied) -- it is how a later 'delete message' from this same socket
+    // proves it is deleting its own message, without trusting a client-sent user/author id.
     db.run(
-      `INSERT INTO messages (user, avatar, text, time, serverId, channelId) VALUES (?, ?, ?, ?, ?, ?)`,
-      [messageData.user, messageData.avatar, messageData.text, messageData.time, serverId, channelId],
+      `INSERT INTO messages (user, avatar, text, time, serverId, channelId, ownerToken) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [messageData.user, messageData.avatar, messageData.text, messageData.time, serverId, channelId, user.ownerToken],
       function(err) {
         if (err) return console.error('Error saving message:', err.message);
 
@@ -613,38 +673,101 @@ io.on('connection', (socket) => {
   });
 
   // ==========================================
-  // ADMIN: DELETE MESSAGE (for everyone)
+  // MESSAGE DELETION + MODERATION (soft delete -- the row and its original text always stay in SQLite;
+  // only admins are ever sent that original text back, by shapeMessageForRecipient()/sendChannelHistory())
   // ==========================================
-  // `ack` is optional and new (older clients that don't pass one are unaffected); it exists so a failed
-  // delete is diagnosable instead of silently doing nothing from the admin's point of view.
+  // A user may delete their OWN message; an admin may delete ANY message. Ownership is decided entirely
+  // from server-side state (`user.ownerToken`, set once per connection in registerUser() -- never from
+  // anything in the payload), so a forged `{ messageId, userId: 'someone-else' }`-style payload has no
+  // effect: only `msgId` is ever read from the client here.
+  // `ack` is optional (older clients that don't pass one are unaffected); it exists so a rejected/failed
+  // delete is diagnosable instead of silently doing nothing from the caller's point of view.
   socket.on('delete message', (msgId, ack) => {
     const reply = typeof ack === 'function' ? ack : () => {};
     const user = connectedUsers.get(socket.id);
-    // Admins only (server-side flag set by a verified admin login)
-    if (!user || !user.isAdmin) {
-      console.log(`[ADMIN] delete message rejected: socket=${socket.id} user=${user ? JSON.stringify(user.username) : '(none)'} isAdmin=${user ? user.isAdmin : false}`);
-      return reply({ ok: false, error: user ? 'Admin access required.' : 'Session not ready yet. Please wait a moment and try again.' });
-    }
+    if (!user) return reply({ ok: false, error: 'Session not ready yet. Please wait a moment and try again.' });
     if (!Number.isSafeInteger(msgId) || msgId <= 0) return reply({ ok: false, error: 'Invalid message.' });
 
-    db.get(`SELECT serverId, channelId FROM messages WHERE id = ?`, [msgId], (err, row) => {
+    db.get(`SELECT serverId, channelId, text, ownerToken, deletedAt FROM messages WHERE id = ?`, [msgId], (err, row) => {
       if (err) { console.error('delete message: lookup failed:', err.message); return reply({ ok: false, error: 'Could not delete the message. Please try again.' }); }
       if (!row) return reply({ ok: false, error: 'That message no longer exists.' });
-      // Admin can only delete messages in the server + channel they are currently in
+      if (row.deletedAt) return reply({ ok: false, error: 'That message was already deleted.' });
+
+      const isOwnMessage = !!user.ownerToken && row.ownerToken === user.ownerToken;
+      if (!user.isAdmin && !isOwnMessage) {
+        console.log(`[MOD] delete message rejected: socket=${socket.id} user=${JSON.stringify(user.username)} msgId=${msgId} reason="not the author and not an admin"`);
+        return reply({ ok: false, error: 'Unauthorized' });
+      }
+      // Both a self-delete and an admin delete are scoped to the room the deleter is currently in --
+      // this is what the existing admin check already did; it now also applies to a self-delete.
       if (row.serverId !== user.currentServer || row.channelId !== user.currentChannel) {
-        console.log(`[ADMIN] delete message rejected: socket=${socket.id} user=${JSON.stringify(user.username)} msgId=${msgId} reason="message is in ${row.serverId}:${row.channelId}, admin is in ${user.currentServer}:${user.currentChannel}"`);
         return reply({ ok: false, error: 'That message is not in your current channel.' });
       }
 
-      console.log(`[ADMIN] delete message: socket=${socket.id} user=${JSON.stringify(user.username)} msgId=${msgId} serverId=${row.serverId} channelId=${row.channelId}`);
-      db.run(`DELETE FROM messages WHERE id = ?`, [msgId], function (err) {
-        if (err) { console.error('delete message: delete failed:', err.message); return reply({ ok: false, error: 'Could not delete the message. Please try again.' }); }
+      const deletedAt = timestamp();
+      const deletedBy = user.username;
+      // `AND deletedAt IS NULL` makes this a no-op if another request beat it to the same row
+      db.run(`UPDATE messages SET deletedAt = ?, deletedBy = ? WHERE id = ? AND deletedAt IS NULL`, [deletedAt, deletedBy, msgId], function (err) {
+        if (err) { console.error('delete message: update failed:', err.message); return reply({ ok: false, error: 'Could not delete the message. Please try again.' }); }
         if (this.changes === 0) return reply({ ok: false, error: 'That message no longer exists.' });
-        // Only clients in that message's channel are told to remove it
-        io.to(getChannelRoom(row.serverId, row.channelId)).emit('message deleted', msgId);
+        console.log(`[MOD] delete message: socket=${socket.id} user=${JSON.stringify(user.username)} msgId=${msgId} serverId=${row.serverId} channelId=${row.channelId} isAdmin=${user.isAdmin} ownMessage=${isOwnMessage}`);
+        broadcastMessageDeleted(row.serverId, row.channelId, msgId, row.text, deletedAt, deletedBy);
         reply({ ok: true });
       });
     });
+  });
+
+  // Admin-only. Soft-deletes every active message in one channel with a single UPDATE (never loads
+  // rows into Node, so this stays cheap even on the Pi regardless of how much history exists), then
+  // refreshes 'load history' for every client currently in that channel's room. Payload: { serverId,
+  // channelId }; the ids are validated against the live registry, never trusted as-is from the client.
+  socket.on('delete all messages', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const adminUser = requireAdmin(reply, 'delete all messages');
+    if (!adminUser) return;
+
+    const serverId = payload && payload.serverId;
+    const channelId = payload && payload.channelId;
+    if (!isValidChannelId(serverId, channelId)) return reply({ ok: false, error: 'That channel does not exist.' });
+
+    const deletedAt = timestamp();
+    const deletedBy = adminUser.username;
+    db.run(
+      `UPDATE messages SET deletedAt = ?, deletedBy = ? WHERE serverId = ? AND channelId = ? AND deletedAt IS NULL`,
+      [deletedAt, deletedBy, serverId, channelId],
+      function (err) {
+        if (err) { console.error('delete all messages: update failed:', err.message); return reply({ ok: false, error: 'Could not delete the messages. Please try again.' }); }
+        console.log(`[ADMIN] delete all messages: socket=${socket.id} user=${JSON.stringify(adminUser.username)} serverId=${serverId} channelId=${channelId} count=${this.changes}`);
+        broadcastChannelHistory(serverId, channelId);
+        reply({ ok: true, count: this.changes });
+      }
+    );
+  });
+
+  // Admin-only. Same as above but for every channel of one server in a single UPDATE. Payload:
+  // { serverId }; validated against the live registry (never trusted as-is), and every channel of
+  // that server has its room refreshed afterward so connected clients update without a page reload.
+  socket.on('delete all server messages', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const adminUser = requireAdmin(reply, 'delete all server messages');
+    if (!adminUser) return;
+
+    const serverId = payload && payload.serverId;
+    if (!isValidServerId(serverId)) return reply({ ok: false, error: 'That server does not exist.' });
+
+    const deletedAt = timestamp();
+    const deletedBy = adminUser.username;
+    db.run(
+      `UPDATE messages SET deletedAt = ?, deletedBy = ? WHERE serverId = ? AND deletedAt IS NULL`,
+      [deletedAt, deletedBy, serverId],
+      function (err) {
+        if (err) { console.error('delete all server messages: update failed:', err.message); return reply({ ok: false, error: 'Could not delete the messages. Please try again.' }); }
+        console.log(`[ADMIN] delete all server messages: socket=${socket.id} user=${JSON.stringify(adminUser.username)} serverId=${serverId} count=${this.changes}`);
+        const targetServer = SERVERS.get(serverId);
+        if (targetServer) for (const targetChannelId of targetServer.channels.keys()) broadcastChannelHistory(serverId, targetChannelId);
+        reply({ ok: true, count: this.changes });
+      }
+    );
   });
 
   // ==========================================
