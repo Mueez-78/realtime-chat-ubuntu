@@ -111,6 +111,12 @@ function migrateDatabase(done) {
         if (!names.has('deletedBy')) db.run(`ALTER TABLE messages ADD COLUMN deletedBy TEXT`);
         if (!names.has('ownerToken')) db.run(`ALTER TABLE messages ADD COLUMN ownerToken TEXT`);
 
+        // Reply (Phase 9): nullable FK-by-convention to another row in the same table. Existing rows
+        // get NULL (not a reply). The target is re-validated server-side on every read and write (see
+        // the 'chat message' handler and sendChannelHistory()'s join) -- this column alone is never
+        // trusted as proof the reply is still valid for a given viewer/channel.
+        if (!names.has('replyToMessageId')) db.run(`ALTER TABLE messages ADD COLUMN replyToMessageId INTEGER`);
+
         // Server/channel registry (Phase 5). passcodeHash NULL = open server.
         db.run(`
           CREATE TABLE IF NOT EXISTS servers (
@@ -213,28 +219,48 @@ function getChannelRoom(serverId, channelId) {
   return `${serverId}:${channelId}`;
 }
 
+const REPLY_PREVIEW_MAX_LENGTH = 120;
+
+// A reply preview is built from the *target* row's own deleted state, shaped for the same recipient
+// the containing message is being sent to -- a non-admin never sees a deleted reply target's original
+// text, same rule as everywhere else. `null` means either "not a reply" or "the reply target no longer
+// exists" (e.g. pruned by retention); the client is expected to fail gracefully in that case.
+function buildReplyPreview(row, isAdminRecipient) {
+  if (!row || row.replyToId == null) return null;
+  const preview = row.replyText == null ? '' : row.replyText.slice(0, REPLY_PREVIEW_MAX_LENGTH);
+  if (row.replyDeletedAt && !isAdminRecipient) return { id: row.replyToId, deleted: true };
+  if (row.replyDeletedAt) return { id: row.replyToId, deleted: true, user: row.replyUser, text: preview };
+  return { id: row.replyToId, user: row.replyUser, text: preview };
+}
+
 // Builds the payload a given recipient is allowed to see for one message row. A deleted message's
 // original text, author and avatar only ever reach an admin socket; everyone else gets nothing but
 // { id, deleted: true } -- not an empty string or a redacted copy, nothing at all (so there is nothing
 // to inspect client-side even via devtools). This shaping happens here, server-side, rather than
 // sending the real content to everyone and hiding it in the UI, which is the actual security requirement.
 function shapeMessageForRecipient(row, isAdminRecipient) {
-  if (!row.deletedAt) return { id: row.id, user: row.user, avatar: row.avatar, time: row.time, isAdmin: row.user === ADMIN_USERNAME, text: row.text };
+  const replyTo = buildReplyPreview(row, isAdminRecipient);
+  if (!row.deletedAt) return { id: row.id, user: row.user, avatar: row.avatar, time: row.time, isAdmin: row.user === ADMIN_USERNAME, text: row.text, replyTo };
   if (isAdminRecipient) {
     return {
       id: row.id, user: row.user, avatar: row.avatar, time: row.time, isAdmin: row.user === ADMIN_USERNAME,
-      text: row.text, deleted: true, deletedAt: row.deletedAt, deletedBy: row.deletedBy,
+      text: row.text, deleted: true, deletedAt: row.deletedAt, deletedBy: row.deletedBy, replyTo,
     };
   }
-  return { id: row.id, deleted: true };
+  return { id: row.id, deleted: true, replyTo };
 }
 
 function sendChannelHistory(socket, serverId, channelId) {
   const recipient = connectedUsers.get(socket.id);
   const isAdminRecipient = !!(recipient && recipient.isAdmin);
-  // 'id' is included so the frontend can address messages for deletion; ownerToken never leaves the backend
+  // 'id' is included so the frontend can address messages for deletion; ownerToken never leaves the
+  // backend. The LEFT JOIN resolves each row's reply target (if any) in the same query -- cheap at
+  // MAX_HISTORY rows and avoids an extra round trip per reply.
   db.all(
-    `SELECT id, user, avatar, text, time, deletedAt, deletedBy FROM messages WHERE serverId = ? AND channelId = ? ORDER BY id DESC LIMIT ?`,
+    `SELECT m.id, m.user, m.avatar, m.text, m.time, m.deletedAt, m.deletedBy, m.replyToMessageId,
+            r.id AS replyToId, r.user AS replyUser, r.text AS replyText, r.deletedAt AS replyDeletedAt
+     FROM messages m LEFT JOIN messages r ON r.id = m.replyToMessageId
+     WHERE m.serverId = ? AND m.channelId = ? ORDER BY m.id DESC LIMIT ?`,
     [serverId, channelId, MAX_HISTORY],
     (err, rows) => {
       if (err) return console.error('Database read error:', err);
@@ -270,6 +296,24 @@ function broadcastMessageDeleted(serverId, channelId, msgId, text, deletedAt, de
       ? { id: msgId, deleted: true, deletedAt, deletedBy, text }
       : { id: msgId, deleted: true };
     targetSocket.emit('message deleted', payload);
+  }
+}
+
+// Realtime fan-out for one freshly-sent message. Only the embedded `replyTo` preview needs shaping per
+// recipient (a brand new message is never itself already-deleted); `replyRow` is whatever the
+// 'chat message' handler already resolved while validating the reply target, or null if this message
+// isn't a reply / its target didn't validate.
+function broadcastChatMessage(serverId, channelId, messageData, replyRow) {
+  const room = getChannelRoom(serverId, channelId);
+  const socketIds = io.sockets.adapter.rooms.get(room);
+  if (!socketIds) return;
+  const adminPayload = { ...messageData, replyTo: buildReplyPreview(replyRow, true) };
+  const guestPayload = { ...messageData, replyTo: buildReplyPreview(replyRow, false) };
+  for (const socketId of socketIds) {
+    const targetSocket = io.sockets.sockets.get(socketId);
+    if (!targetSocket) continue;
+    const recipient = connectedUsers.get(socketId);
+    targetSocket.emit('chat message', (recipient && recipient.isAdmin) ? adminPayload : guestPayload);
   }
 }
 
@@ -435,6 +479,26 @@ function isRateLimited(user) {
   return false;
 }
 
+// ==========================================
+// TYPING INDICATORS -- in-memory only, never written to SQLite. The client only ever debounces/
+// throttles its own emits (see index.html); this expiry is a server-side backstop so a socket that
+// drops without a clean 'stop typing' (or even a clean disconnect -- a closed tab can take a while to
+// be detected) can never leave a "is typing..." ghost in a room forever. One timer per actively-typing
+// socket, cleared and replaced on every refresh -- no setInterval sweep running continuously.
+// ==========================================
+const TYPING_EXPIRY_MS = 5000;
+const typingState = new Map(); // socketId -> { serverId, channelId, timer }
+
+function clearTyping(socketId, broadcast) {
+  const state = typingState.get(socketId);
+  if (!state) return;
+  clearTimeout(state.timer);
+  typingState.delete(socketId);
+  if (!broadcast) return;
+  const user = connectedUsers.get(socketId);
+  if (user) io.to(getChannelRoom(state.serverId, state.channelId)).emit('stop typing', user.username);
+}
+
 io.on('connection', (socket) => {
   console.log(`🟢 Socket connected: ${socket.id}`);
 
@@ -491,7 +555,9 @@ io.on('connection', (socket) => {
     if (existing) {
       // Profile change on the same connection: keep the joined server and rate-limit state
       if (existing.currentServer && existing.username !== username) {
-        socket.to(getChannelRoom(existing.currentServer, existing.currentChannel)).emit('stop typing', existing.username);
+        // The old display name is what the room last saw as "typing"; clear it before it's renamed
+        // out from under that broadcast (clearTyping() would otherwise use the NEW username instead).
+        clearTyping(socket.id, true);
       }
       Object.assign(existing, { username, avatar, isAdmin });
       broadcastUserList(existing.currentServer);
@@ -543,6 +609,7 @@ io.on('connection', (socket) => {
     if (!user.currentServer) return;
     const room = getChannelRoom(user.currentServer, user.currentChannel);
     socket.leave(room);
+    clearTyping(socket.id, false); // about to leave the room anyway; the broadcast below covers it
     socket.to(room).emit('stop typing', user.username);
   }
 
@@ -643,33 +710,52 @@ io.on('connection', (socket) => {
     const serverId = user.currentServer;
     const channelId = user.currentChannel;
 
-    const messageData = {
-      user: user.username,
-      avatar: user.avatar,
-      isAdmin: user.isAdmin,
-      text, 
-      time: timestamp() 
-    };
-    
-    // Save the message, then broadcast it with its new id. ownerToken is this connection's own token
-    // (never anything client-supplied) -- it is how a later 'delete message' from this same socket
-    // proves it is deleting its own message, without trusting a client-sent user/author id.
-    db.run(
-      `INSERT INTO messages (user, avatar, text, time, serverId, channelId, ownerToken) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [messageData.user, messageData.avatar, messageData.text, messageData.time, serverId, channelId, user.ownerToken],
-      function(err) {
-        if (err) return console.error('Error saving message:', err.message);
+    // `replyRow` (when not null) is { replyToId, replyUser, replyText, replyDeletedAt } -- the same
+    // shape buildReplyPreview() expects from the history JOIN, so both paths share one function.
+    function finishSend(replyToMessageId, replyRow) {
+      const messageData = {
+        user: user.username,
+        avatar: user.avatar,
+        isAdmin: user.isAdmin,
+        text,
+        time: timestamp(),
+      };
 
-        messageData.id = this.lastID; // id assigned by SQLite
-        io.to(getChannelRoom(serverId, channelId)).emit('chat message', messageData);
+      // Save the message, then broadcast it with its new id. ownerToken is this connection's own token
+      // (never anything client-supplied) -- it is how a later 'delete message' from this same socket
+      // proves it is deleting its own message, without trusting a client-sent user/author id.
+      db.run(
+        `INSERT INTO messages (user, avatar, text, time, serverId, channelId, ownerToken, replyToMessageId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [messageData.user, messageData.avatar, messageData.text, messageData.time, serverId, channelId, user.ownerToken, replyToMessageId],
+        function (err) {
+          if (err) return console.error('Error saving message:', err.message);
 
-        // Retention is per channel: only this channel's oldest messages are pruned
-        db.run(
-          `DELETE FROM messages WHERE serverId = ? AND channelId = ? AND id NOT IN (SELECT id FROM messages WHERE serverId = ? AND channelId = ? ORDER BY id DESC LIMIT ?)`,
-          [serverId, channelId, serverId, channelId, MAX_STORED_PER_CHANNEL]
-        );
-      }
-    );
+          messageData.id = this.lastID; // id assigned by SQLite
+          broadcastChatMessage(serverId, channelId, messageData, replyRow);
+
+          // Retention is per channel: only this channel's oldest messages are pruned
+          db.run(
+            `DELETE FROM messages WHERE serverId = ? AND channelId = ? AND id NOT IN (SELECT id FROM messages WHERE serverId = ? AND channelId = ? ORDER BY id DESC LIMIT ?)`,
+            [serverId, channelId, serverId, channelId, MAX_STORED_PER_CHANNEL]
+          );
+        }
+      );
+    }
+
+    // Reply target validation: must exist, and must belong to the SAME server+channel the sender is
+    // currently (and therefore authorizedly) in -- never trusted from the payload beyond that check.
+    // An invalid/cross-channel/missing target just sends the message without a reply reference
+    // attached, rather than rejecting the whole send over a stale or forged replyToMessageId.
+    const rawReplyId = data.replyToMessageId;
+    if (Number.isSafeInteger(rawReplyId) && rawReplyId > 0) {
+      db.get(`SELECT id, serverId, channelId, user, text, deletedAt FROM messages WHERE id = ?`, [rawReplyId], (err, row) => {
+        if (err) { console.error('reply lookup failed:', err.message); return finishSend(null, null); }
+        if (!row || row.serverId !== serverId || row.channelId !== channelId) return finishSend(null, null);
+        finishSend(row.id, { replyToId: row.id, replyUser: row.user, replyText: row.text, replyDeletedAt: row.deletedAt });
+      });
+    } else {
+      finishSend(null, null);
+    }
   });
 
   // ==========================================
@@ -985,6 +1071,7 @@ io.on('connection', (socket) => {
         if (!targetSocket) continue;
         targetSocket.leave(getChannelRoom(serverId, channelId));
         targetSocket.join(getChannelRoom(serverId, fallbackChannelId));
+        clearTyping(socketId, true); // was typing in the now-deleted channel; don't leak it into the fallback
         user.currentChannel = fallbackChannelId;
         affectedSocketIds.push(socketId);
       }
@@ -1006,18 +1093,26 @@ io.on('connection', (socket) => {
     }
   });
 
+  // The client debounces/throttles its own emits (one 'typing' per burst, refreshed at most every few
+  // seconds while still typing, never per keystroke) -- this handler just relays it and (re)starts the
+  // server-side expiry backstop. Nothing here is written to SQLite; `typingState` is in-memory only.
   socket.on('typing', () => {
     const user = connectedUsers.get(socket.id);
-    if (user && user.username && user.currentServer) {
-      socket.to(getChannelRoom(user.currentServer, user.currentChannel)).emit('typing', user.username);
-    }
+    if (!user || !user.username || !user.currentServer) return;
+    const serverId = user.currentServer;
+    const channelId = user.currentChannel;
+    const existing = typingState.get(socket.id);
+    if (existing) clearTimeout(existing.timer);
+    const timer = setTimeout(() => clearTyping(socket.id, true), TYPING_EXPIRY_MS);
+    typingState.set(socket.id, { serverId, channelId, timer });
+    socket.to(getChannelRoom(serverId, channelId)).emit('typing', user.username);
   });
 
   socket.on('stop typing', () => {
     const user = connectedUsers.get(socket.id);
-    if (user && user.username && user.currentServer) {
-      socket.to(getChannelRoom(user.currentServer, user.currentChannel)).emit('stop typing', user.username);
-    }
+    if (!user || !user.username || !user.currentServer) return;
+    clearTyping(socket.id, false); // we're about to broadcast it ourselves, right below
+    socket.to(getChannelRoom(user.currentServer, user.currentChannel)).emit('stop typing', user.username);
   });
 
   socket.on('disconnect', () => {
@@ -1026,8 +1121,11 @@ io.on('connection', (socket) => {
       connectedUsers.delete(socket.id);
       if (user.currentServer) {
         // Don't leave a stale "is typing…" behind for the others
+        clearTyping(socket.id, false);
         io.to(getChannelRoom(user.currentServer, user.currentChannel)).emit('stop typing', user.username);
         broadcastUserList(user.currentServer);
+      } else {
+        clearTyping(socket.id, false);
       }
     }
     console.log(`🔴 Socket disconnected: ${socket.id}`);

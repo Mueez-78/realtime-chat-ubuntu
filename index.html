@@ -149,21 +149,43 @@
   .text { white-space: pre-wrap; overflow-wrap: anywhere; color: #dcdee2; font-size: 0.97em; }
   .text a { color: var(--accent-text); text-decoration: none; }
   .text a:hover { text-decoration: underline; }
-  .delete-btn { position: absolute; top: 2px; right: 12px; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); color: var(--muted); display: flex; align-items: center; justify-content: center; padding: 0; opacity: 0; transition: opacity 0.12s, color 0.12s; }
-  .delete-btn svg { width: 16px; height: 16px; fill: currentColor; }
-  .message:hover .delete-btn, .delete-btn:focus-visible { opacity: 1; }
-  .delete-btn:hover { color: var(--danger); }
-  @media (hover: none) { .delete-btn { opacity: 0.75; background: transparent; border-color: transparent; } }
+  .msg-actions-btn { position: absolute; top: 2px; right: 12px; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel); color: var(--muted); display: flex; align-items: center; justify-content: center; padding: 0; opacity: 0; transition: opacity 0.12s, color 0.12s; }
+  .msg-actions-btn svg { width: 16px; height: 16px; fill: currentColor; }
+  .message:hover .msg-actions-btn, .msg-actions-btn:focus-visible { opacity: 1; }
+  .msg-actions-btn:hover { color: var(--text-2); }
+  @media (hover: none) { .msg-actions-btn { opacity: 0.75; background: transparent; border-color: transparent; } }
   .system-message { text-align: center; font-size: 0.78em; color: var(--muted); margin: 10px auto; padding: 3px 10px; width: fit-content; max-width: 90%; border: 1px solid var(--border); border-radius: 999px; }
   /* Admin-only view of a deleted message: original text stays, visibly subdued, with who/when deleted it */
   .message-deleted .text { color: var(--muted); font-style: italic; }
   .deleted-tag { font-size: 0.72em; color: var(--faint); font-weight: 400; }
+
+  /* ---------- Reply reference (shown above a reply's own text) ---------- */
+  .reply-ref { display: flex; align-items: center; gap: 5px; font-size: 0.82em; color: var(--muted); margin-bottom: 2px; max-width: 100%; overflow: hidden; cursor: pointer; border-radius: 4px; }
+  .reply-ref:hover { color: var(--text-2); }
+  .reply-ref svg { width: 14px; height: 14px; flex-shrink: 0; fill: currentColor; color: var(--faint); }
+  .reply-ref-name { font-weight: 600; color: var(--accent-text); flex-shrink: 0; }
+  .reply-ref-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .reply-ref-unavailable { cursor: default; font-style: italic; }
+  .reply-ref-unavailable:hover { color: var(--muted); }
+  /* Briefly highlight a message scrolled-to via a reply reference; fades back out on its own */
+  .message.reply-highlight { background: var(--accent-soft); transition: background 1.4s ease; }
+
+  /* ---------- Per-message action menu (floating; positioned in JS, not anchored like .admin-menu) ---------- */
+  .msg-actions-menu { position: fixed; top: 0; left: 0; right: auto; width: max-content; }
 
   #typing-indicator { height: 0; overflow: hidden; font-size: 0.76em; color: var(--muted); padding: 0 16px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
   #typing-indicator.visible { height: 20px; }
   #typing-indicator.visible::before { content: ''; width: 18px; height: 4px; flex-shrink: 0; background: radial-gradient(circle, var(--text-2) 1.6px, transparent 1.8px) 0 0 / 6px 4px repeat-x; }
   .scroll-bottom-btn { position: absolute; bottom: 10px; right: 16px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--bg-panel); color: var(--text); opacity: 0; pointer-events: none; transition: opacity 0.15s; }
   .scroll-bottom-btn.visible { opacity: 1; pointer-events: auto; }
+
+  /* ---------- Reply preview (above the composer, cleared on cancel/send/channel switch) ---------- */
+  .reply-preview { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin: 0 12px 6px; padding: 6px 6px 6px 10px; background: var(--bg-input); border: 1px solid var(--border); border-left: 2px solid var(--accent); border-radius: 8px; }
+  .reply-preview-info { min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .reply-preview-label { font-size: 0.78em; font-weight: 600; color: var(--accent-text); }
+  .reply-preview-text { font-size: 0.82em; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #reply-preview-cancel { width: 26px; height: 26px; flex-shrink: 0; }
+  #reply-preview-cancel svg { width: 14px; height: 14px; }
 
   /* ---------- Composer ---------- */
   #form { position: relative; padding: 2px 12px calc(10px + var(--safe-bottom)); flex-shrink: 0; }
@@ -363,6 +385,16 @@
         <button class="scroll-bottom-btn" id="scroll-bottom-btn" type="button" aria-label="Scroll to latest">↓</button>
       </div>
       <div id="typing-indicator"></div>
+
+      <div class="reply-preview" id="reply-preview" hidden>
+        <div class="reply-preview-info">
+          <span class="reply-preview-label">Replying to <span id="reply-preview-name"></span></span>
+          <span class="reply-preview-text" id="reply-preview-text"></span>
+        </div>
+        <button type="button" id="reply-preview-cancel" class="icon-btn" aria-label="Cancel reply">
+          <svg viewBox="0 0 24 24"><path d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4z"/></svg>
+        </button>
+      </div>
 
       <form id="form" autocomplete="off">
         <div class="composer-box">
@@ -594,13 +626,23 @@
 
   <div id="toast" role="status"></div>
 
+  <!-- Per-message action menu (Reply / Delete / Cancel) -- shared by the desktop "⋯" button, right-click,
+       and the mobile long-press gesture. Repositioned and repopulated at open time; see
+       openMessageActions() below. Authorization for Delete is re-checked on the backend regardless of
+       which items this happens to show. -->
+  <div class="admin-menu msg-actions-menu" id="msg-actions-menu" role="menu" aria-label="Message actions" hidden>
+    <button type="button" role="menuitem" id="msg-action-reply">Reply</button>
+    <button type="button" role="menuitem" id="msg-action-delete" class="admin-menu-danger">Delete</button>
+    <button type="button" role="menuitem" id="msg-action-cancel">Cancel</button>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
   (function () {
     // Bump this string whenever the frontend changes meaningfully. Printed on load so a stale cached
     // copy (browser cache or an intermediate proxy) can be spotted from the browser console instead of
     // guessed at -- check this against the value in the deployed index.html source.
-    const APP_BUILD = 'phase7-2026-10-05';
+    const APP_BUILD = 'phase9-2026-10-06';
     console.log('[DIT Chat] build', APP_BUILD);
 
     const socket = io();
@@ -633,6 +675,14 @@
     const statusText = document.getElementById('status-text');
     const typingIndicator = document.getElementById('typing-indicator');
     const scrollBtn = document.getElementById('scroll-bottom-btn');
+    const replyPreview = document.getElementById('reply-preview');
+    const replyPreviewName = document.getElementById('reply-preview-name');
+    const replyPreviewText = document.getElementById('reply-preview-text');
+    const replyPreviewCancel = document.getElementById('reply-preview-cancel');
+    const msgActionsMenu = document.getElementById('msg-actions-menu');
+    const msgActionReply = document.getElementById('msg-action-reply');
+    const msgActionDelete = document.getElementById('msg-action-delete');
+    const msgActionCancel = document.getElementById('msg-action-cancel');
 
     const appContainer = document.getElementById('app-container');
     const headerTitle = document.getElementById('header-title');
@@ -817,8 +867,12 @@
       el.classList.add('server-initial');
     }
     const LOCK_ICON = lineIcon('lock');
-    const TRASH_ICON = '<svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9zm4 2v8h2v-8h-2zm4 0v8h2v-8h-2z"/></svg>';
+    const MORE_ICON = '<svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg>';
+    const REPLY_ICON = '<svg viewBox="0 0 24 24"><path d="M10 9V5l-7 7 7 7v-4c5 0 8 2 10 6 0-6-3-11-10-11z"/></svg>';
     let lastKnownUserCount = 0; let typingTimeout = null; const typingUsers = new Set(); let isNearBottom = true; let toastTimeout = null;
+    let pendingReplyId = null;          // message being composed as a reply; cleared on send/cancel/channel switch
+    let activeMsgActionsTarget = null;  // message id the floating actions menu (Reply/Delete) is currently open for
+    let activeMsgActionsIsMine = false; // wording for the delete confirm depends on ownership, same as the old delete-btn
 
     // ==========================================
     // Guest identity (convenience only, not an account) + in-memory admin session
@@ -969,11 +1023,13 @@
     });
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
-      if (!adminMenu.hidden) { closeAdminMenu(); serverSettingsBtn.focus(); }
+      if (!msgActionsMenu.hidden) closeMessageActions();
+      else if (!adminMenu.hidden) { closeAdminMenu(); serverSettingsBtn.focus(); }
       else if (confirmModal.classList.contains('visible')) closeConfirmModal();
       else if (adminModal.classList.contains('visible')) closeAdminModal();
       else if (passcodeModal.classList.contains('visible')) closePasscodeModal(true);
       else if (usernameModal.classList.contains('visible') && displayName) closeEntry();
+      else if (!replyPreview.hidden) cancelReply();
       else { closeSidebar(); closeMembers(); }
     });
 
@@ -1886,6 +1942,122 @@
       meta.appendChild(tag);
     }
 
+    // `replyTo` is whatever shapeMessageForRecipient()/buildReplyPreview() decided THIS socket may see:
+    // undefined/null (not a reply, or its target no longer exists -- e.g. pruned by retention), an
+    // unavailable stub (deleted target, non-admin recipient: no user/text), or the full preview.
+    // dataset.refId drives both the scroll-to-original click and the live update on 'message deleted'.
+    function buildReplyRef(replyTo) {
+      if (!replyTo) return null;
+      const ref = document.createElement('div');
+      if (replyTo.text === undefined) {
+        ref.className = 'reply-ref reply-ref-unavailable';
+        ref.textContent = 'Original message unavailable';
+        return ref;
+      }
+      ref.className = 'reply-ref';
+      ref.dataset.refId = replyTo.id;
+      const icon = document.createElement('span');
+      icon.innerHTML = REPLY_ICON;
+      const name = document.createElement('span');
+      name.className = 'reply-ref-name';
+      name.textContent = replyTo.user;
+      const text = document.createElement('span');
+      text.className = 'reply-ref-text';
+      text.textContent = replyTo.deleted ? '(message deleted)' : replyTo.text;
+      ref.append(icon, name, text);
+      ref.addEventListener('click', () => scrollToMessage(replyTo.id));
+      return ref;
+    }
+
+    // Scrolls to and briefly highlights a message already present in the loaded (last 50) history.
+    // There is no "load older messages" feature, so an out-of-range target just fails gracefully.
+    function scrollToMessage(id) {
+      const el = document.getElementById('msg-' + id);
+      if (!el) { showToast("That message isn't loaded here."); return; }
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('reply-highlight');
+      setTimeout(() => el.classList.remove('reply-highlight'), 1500);
+    }
+
+    // Long-press (touch only -- desktop uses hover + the actions button, or right-click) opens the
+    // same message actions menu. Cancelled by any meaningful finger movement so it doesn't fire during
+    // a scroll.
+    const LONG_PRESS_MS = 450;
+    const LONG_PRESS_MOVE_TOLERANCE = 10;
+    function attachLongPress(el, onLongPress) {
+      let timer = null, startX = 0, startY = 0;
+      function cancel() { clearTimeout(timer); timer = null; }
+      el.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+        cancel();
+        timer = setTimeout(() => { timer = null; onLongPress(); }, LONG_PRESS_MS);
+      }, { passive: true });
+      el.addEventListener('touchmove', (e) => {
+        if (!timer) return;
+        const dx = Math.abs(e.touches[0].clientX - startX), dy = Math.abs(e.touches[0].clientY - startY);
+        if (dx > LONG_PRESS_MOVE_TOLERANCE || dy > LONG_PRESS_MOVE_TOLERANCE) cancel();
+      }, { passive: true });
+      el.addEventListener('touchend', cancel);
+      el.addEventListener('touchcancel', cancel);
+    }
+
+    // ---------- Per-message actions menu (Reply / Delete / Cancel) ----------
+    // Shared by the desktop "⋯" button, right-click, and the mobile long-press gesture. Positioned in
+    // JS (it's `position: fixed`, not anchored like .admin-menu) at the point the gesture happened,
+    // then clamped so it never renders off-screen.
+    function openMessageActions(msgId, isMine, x, y) {
+      activeMsgActionsTarget = msgId;
+      activeMsgActionsIsMine = isMine;
+      msgActionDelete.hidden = !(isAdmin || isMine);
+      msgActionsMenu.hidden = false;
+      msgActionsMenu.style.left = '0px';
+      msgActionsMenu.style.top = '0px';
+      const margin = 8;
+      const rect = msgActionsMenu.getBoundingClientRect();
+      let left = Math.min(x, window.innerWidth - rect.width - margin);
+      let top = y + rect.height > window.innerHeight - margin ? y - rect.height - margin : y;
+      left = Math.max(margin, left); top = Math.max(margin, top);
+      msgActionsMenu.style.left = left + 'px';
+      msgActionsMenu.style.top = top + 'px';
+      msgActionReply.focus();
+    }
+    function closeMessageActions() {
+      msgActionsMenu.hidden = true;
+      activeMsgActionsTarget = null;
+    }
+    document.addEventListener('click', (e) => { if (!msgActionsMenu.hidden && !msgActionsMenu.contains(e.target)) closeMessageActions(); });
+    msgActionReply.addEventListener('click', () => {
+      const id = activeMsgActionsTarget;
+      closeMessageActions();
+      if (id != null) startReply(id);
+    });
+    msgActionDelete.addEventListener('click', () => {
+      const id = activeMsgActionsTarget, isMine = activeMsgActionsIsMine;
+      closeMessageActions();
+      if (id != null) confirmDeleteMessage(id, isMine && !isAdmin);
+    });
+    msgActionCancel.addEventListener('click', closeMessageActions);
+
+    // ---------- Reply preview (shown above the composer until sent, cancelled, or the channel changes) ----------
+    function startReply(id) {
+      const li = document.getElementById('msg-' + id);
+      if (!li) return;
+      pendingReplyId = id;
+      replyPreviewName.textContent = li.dataset.user || '';
+      const textEl = li.querySelector('.text');
+      replyPreviewText.textContent = textEl ? textEl.textContent : '';
+      replyPreview.hidden = false;
+      input.focus();
+    }
+    function cancelReply() {
+      pendingReplyId = null;
+      replyPreview.hidden = true;
+      replyPreviewName.textContent = '';
+      replyPreviewText.textContent = '';
+    }
+    replyPreviewCancel.addEventListener('click', cancelReply);
+
     function appendMessage(data) {
       const li = document.createElement('li');
       li.id = 'msg-' + data.id;
@@ -1911,6 +2083,7 @@
         fillAvatar(avatar, data.user, data.avatar);
 
         const body = document.createElement('div');
+        const replyRef = buildReplyRef(data.replyTo);
         const meta = document.createElement('div');
         meta.className = 'msg-meta';
         const sender = document.createElement('span');
@@ -1927,6 +2100,7 @@
         const textDiv = document.createElement('div');
         textDiv.className = 'text';
         renderMessageText(textDiv, data.text);
+        if (replyRef) body.appendChild(replyRef);
         body.append(meta, textDiv);
         li.append(avatar, body);
 
@@ -1936,18 +2110,32 @@
         if (data.isAdmin && !knownAdmins.has(data.user)) { knownAdmins.add(data.user); membersChanged = true; }
         if (membersChanged && members.includes(data.user)) renderMembers();
 
-        // A message that's already deleted has nothing left to delete. Otherwise: admins can delete
-        // any message, and anyone can delete their own (the backend re-checks ownership/admin rights
-        // on every delete regardless of why this button is or isn't shown).
-        if (!data.deleted && (isAdmin || isMe)) {
-          const deleteBtn = document.createElement('button');
-          deleteBtn.type = 'button';
-          deleteBtn.className = 'delete-btn';
-          deleteBtn.innerHTML = TRASH_ICON; // static markup
-          deleteBtn.title = 'Delete message';
-          deleteBtn.setAttribute('aria-label', deleteBtn.title);
-          deleteBtn.onclick = () => confirmDeleteMessage(data.id, isMe && !isAdmin);
-          li.appendChild(deleteBtn);
+        // A deleted message can't be replied to or deleted again. Reply is offered to anyone;
+        // Delete inside the same menu is only ever shown for an admin or the message's own sender --
+        // the backend re-checks ownership/admin rights on every delete regardless of why this button
+        // is or isn't shown.
+        if (!data.deleted) {
+          const actionsBtn = document.createElement('button');
+          actionsBtn.type = 'button';
+          actionsBtn.className = 'msg-actions-btn';
+          actionsBtn.innerHTML = MORE_ICON; // static markup
+          actionsBtn.title = 'Message actions';
+          actionsBtn.setAttribute('aria-label', actionsBtn.title);
+          actionsBtn.setAttribute('aria-haspopup', 'menu');
+          actionsBtn.onclick = (e) => {
+            e.stopPropagation();
+            const rect = actionsBtn.getBoundingClientRect();
+            openMessageActions(data.id, isMe, rect.right, rect.bottom + 4);
+          };
+          li.appendChild(actionsBtn);
+          attachLongPress(li, () => {
+            const rect = li.getBoundingClientRect();
+            openMessageActions(data.id, isMe, rect.left + rect.width / 2, rect.top + rect.height / 2);
+          });
+          li.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            openMessageActions(data.id, isMe, e.clientX, e.clientY);
+          });
         }
       }
 
@@ -1969,11 +2157,23 @@
       } else {
         // Admin: the original content is already showing -- just mark it deleted and remove the button
         msgEl.classList.add('message-deleted');
-        const deleteBtn = msgEl.querySelector('.delete-btn');
-        if (deleteBtn) deleteBtn.remove();
+        const actionsBtn = msgEl.querySelector('.msg-actions-btn');
+        if (actionsBtn) actionsBtn.remove();
         const meta = msgEl.querySelector('.msg-meta');
         if (meta && !meta.querySelector('.deleted-tag')) fillDeletedMeta(meta, data);
       }
+      // Any already-rendered reply referencing this message should stop showing its live text --
+      // same per-recipient rule as everywhere else: an admin still sees it (marked deleted), a guest
+      // just sees it became unavailable.
+      document.querySelectorAll('.reply-ref[data-ref-id="' + data.id + '"]').forEach((ref) => {
+        if (data.text === undefined || data.text === null) {
+          ref.className = 'reply-ref reply-ref-unavailable';
+          ref.textContent = 'Original message unavailable';
+        } else {
+          const text = ref.querySelector('.reply-ref-text');
+          if (text) text.textContent = '(message deleted)';
+        }
+      });
     });
 
     // Plain text with http(s) links made clickable. Built from text nodes, never parsed as HTML.
@@ -2007,6 +2207,7 @@
 
     socket.on('load history', (history) => {
       messagesEl.innerHTML = '';
+      cancelReply(); closeMessageActions(); // a reply/menu targeting the old channel's messages makes no sense here
       if (history.length < HISTORY_PAGE) renderChannelIntro();
       history.forEach(appendMessage); scrollToBottom(false);
       if (awaitingHistory) finishNav();
@@ -2046,9 +2247,11 @@
     form.addEventListener('submit', (e) => {
       e.preventDefault(); const text = input.value.trim();
       if (!displayName || !text || !currentServer) return;
-      // serverId/channelId are hints only; the backend routes by the socket's confirmed location
-      socket.emit('chat message', { serverId: currentServer, channelId: currentChannel, text });
-      input.value = ''; charCounter.classList.remove('visible'); sendBtn.classList.remove('ready'); clearTimeout(typingTimeout); socket.emit('stop typing'); isNearBottom = true;
+      // serverId/channelId are hints only; the backend routes by the socket's confirmed location.
+      // replyToMessageId is re-validated server-side too (must exist, same server+channel) before it's
+      // ever attached to the saved/broadcast message.
+      socket.emit('chat message', { serverId: currentServer, channelId: currentChannel, text, replyToMessageId: pendingReplyId || undefined });
+      input.value = ''; charCounter.classList.remove('visible'); sendBtn.classList.remove('ready'); clearTimeout(typingTimeout); socket.emit('stop typing'); isNearBottom = true; cancelReply();
     });
 
     socket.on('rate limited', () => showToast("You're sending messages a bit fast — give it a second."));
