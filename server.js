@@ -449,6 +449,37 @@ io.on('connection', (socket) => {
     socket.emit('login success', { username, isAdmin });
   }
 
+  // Admin -> guest downgrade on the same connection (ack-based). Payload: { name, avatar? }.
+  // Must already be an admin on THIS socket -- requireAdmin() reads that from connectedUsers, never
+  // from anything the client sends, so a payload like { isAdmin: true } or { role: 'admin' } has no
+  // effect here or anywhere else. The resulting identity is registered exactly like a fresh
+  // 'set username'; any server/channel this socket had joined is left first so a locked server the
+  // admin bypassed gets re-validated as a guest on the next 'join server', instead of silently keeping
+  // the admin's old room membership (and with it, continued access to a locked server's messages).
+  socket.on('switch to guest', (payload, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const adminUser = requireAdmin(reply, 'switch to guest');
+    if (!adminUser) return;
+
+    const username = sanitizeUsername(payload && payload.name);
+    if (!username) return reply({ ok: false, error: 'Please enter a name.' });
+    if (isAdminName(username)) return reply({ ok: false, error: 'This name is reserved. Please choose another.' });
+
+    console.log(`[ADMIN] switch to guest: socket=${socket.id} from=${JSON.stringify(adminUser.username)} to=${JSON.stringify(username)}`);
+
+    leaveCurrentChannel(adminUser);
+    const previousServer = adminUser.currentServer;
+    if (previousServer) {
+      socket.leave(previousServer);
+      adminUser.currentServer = null;
+      adminUser.currentChannel = null;
+      broadcastUserList(previousServer);
+    }
+
+    reply({ ok: true, username });
+    registerUser(username, sanitizeAvatar(payload.avatar), false);
+  });
+
   // Leave the current channel room, clearing any typing indicator this user left behind there
   function leaveCurrentChannel(user) {
     if (!user.currentServer) return;

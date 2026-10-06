@@ -203,9 +203,10 @@
   .brand { font-size: 0.72em; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-text); }
   .modal-card h2 { margin: 6px 0 4px; font-size: 1.3em; font-weight: 600; }
   .modal-card p { margin: 0 0 18px; color: var(--muted); font-size: 0.9em; }
-  #avatar-preview { width: 80px; height: 80px; margin: 0 auto; border-radius: 50%; background: var(--bg-input); border: 1px dashed var(--border-strong); display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; font-size: 24px; transition: border-color 0.12s; }
-  #avatar-preview:hover { border-color: var(--accent); }
+  #avatar-preview { width: 80px; height: 80px; margin: 0 auto; border-radius: 50%; background: var(--bg-input); border: 1px dashed var(--border-strong); display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: pointer; color: var(--muted); transition: border-color 0.12s, color 0.12s; }
+  #avatar-preview:hover { border-color: var(--accent); color: var(--accent-text); }
   #avatar-preview.has-image { border: none; }
+  #avatar-preview svg { width: 28px; height: 28px; }
   #avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
   .avatar-hint { display: block; font-size: 0.74em; color: var(--faint); margin-top: 6px; }
   .modal-form { display: flex; flex-direction: column; gap: 6px; margin-top: 18px; text-align: left; }
@@ -241,6 +242,13 @@
   .modal-actions .btn-primary, .modal-actions .btn-secondary { flex: 1; margin-top: 0; }
   .link-btn { background: none; border: none; color: var(--muted); font-size: 0.82em; padding: 8px 12px; margin-top: 10px; border-radius: 6px; }
   .link-btn:hover { color: var(--accent-text); }
+
+  /* ---------- Edit profile: account mode (admin-only "switch to guest") ---------- */
+  .account-section { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .account-row { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 11px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-input); color: var(--text-2); font-size: 0.9em; text-align: left; }
+  .account-row-action { color: var(--text); transition: border-color 0.12s, background 0.12s; }
+  .account-row-action svg { width: 16px; height: 16px; color: var(--faint); flex-shrink: 0; }
+  .account-row-action:hover { border-color: var(--border-strong); background: var(--hover); }
 
   #toast { position: fixed; left: 50%; bottom: calc(80px + var(--safe-bottom)); transform: translateX(-50%); max-width: calc(100vw - 32px); background: #26272b; color: var(--text); border: 1px solid var(--border-strong); padding: 9px 14px; border-radius: 8px; font-size: 0.86em; box-shadow: 0 6px 16px rgba(0,0,0,0.3); opacity: 0; pointer-events: none; transition: opacity 0.18s; z-index: 200; }
   #toast.visible { opacity: 1; }
@@ -378,16 +386,37 @@
         <div class="brand">DIT Chat</div>
         <h2 id="entry-title">Welcome</h2>
         <p id="entry-subtitle">Pick a name to start chatting. No account needed.</p>
-        <label for="avatar-upload" id="avatar-preview" title="Choose an avatar"><span>📷</span></label>
+        <label for="avatar-upload" id="avatar-preview" title="Choose an avatar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h1a2 2 0 0 0 2 -2a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2"/><path d="M9 13a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"/></svg>
+        </label>
         <input type="file" id="avatar-upload" accept="image/*" hidden />
         <span class="avatar-hint">Avatar (optional)</span>
         <form id="username-form" class="modal-form" novalidate>
           <label class="field-label" for="username-input">Display name</label>
           <input id="username-input" maxlength="24" placeholder="Your name" autocomplete="nickname" required />
           <div class="form-error" id="entry-error" role="alert"></div>
+          <div class="account-section" id="account-section" hidden>
+            <span class="field-label">Account</span>
+            <div class="account-row">Admin Account</div>
+            <button type="button" class="account-row account-row-action" id="switch-guest-btn">
+              <span>Guest Account</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6l-6 6"/></svg>
+            </button>
+          </div>
           <button type="submit" class="btn-primary" id="entry-submit">Continue</button>
         </form>
         <button type="button" class="link-btn" id="admin-link">Admin</button>
+      </section>
+
+      <section id="guest-switch-panel" hidden>
+        <div class="brand">DIT Chat</div>
+        <h2>Switch to Guest Account?</h2>
+        <p>You will leave your admin session and continue as a guest.</p>
+        <div class="form-error" id="guest-switch-error" role="alert"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="guest-switch-cancel">Cancel</button>
+          <button type="button" class="btn-primary" id="guest-switch-confirm">Continue as Guest</button>
+        </div>
       </section>
 
       <section id="admin-panel" hidden>
@@ -587,6 +616,12 @@
     const adminPassword = document.getElementById('admin-password');
     const adminSubmit = document.getElementById('admin-submit');
     const adminError = document.getElementById('admin-error');
+    const accountSection = document.getElementById('account-section');
+    const switchGuestBtn = document.getElementById('switch-guest-btn');
+    const guestSwitchPanel = document.getElementById('guest-switch-panel');
+    const guestSwitchError = document.getElementById('guest-switch-error');
+    const guestSwitchCancel = document.getElementById('guest-switch-cancel');
+    const guestSwitchConfirm = document.getElementById('guest-switch-confirm');
 
     const serverSettingsBtn = document.getElementById('server-settings-btn');
     const adminModal = document.getElementById('admin-modal');
@@ -680,6 +715,8 @@
     function lineIcon(name) {
       return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LINE_ICONS[name]}</svg>`;
     }
+    // Tabler: camera -- avatar-picker placeholder (matches the static markup in #avatar-preview's initial HTML)
+    const CAMERA_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h1a2 2 0 0 0 2 -2a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2"/><path d="M9 13a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"/></svg>';
     // Servers store a short emoji/text icon (backend data is unchanged); the UI shows the matching line icon.
     const SERVER_ICON_BY_ID = { 'dit-lounge': 'monogram' };
     const SERVER_ICON_BY_VALUE = {
@@ -753,8 +790,7 @@
         const img = document.createElement('img'); img.src = userAvatar; img.alt = '';
         avatarPreview.appendChild(img);
       } else {
-        const icon = document.createElement('span'); icon.textContent = '📷';
-        avatarPreview.appendChild(icon);
+        avatarPreview.innerHTML = CAMERA_ICON; // static markup
       }
     }
 
@@ -763,20 +799,26 @@
       clearTimeout(toastTimeout); toastTimeout = setTimeout(() => toast.classList.remove('visible'), ms);
     }
 
-    // Modal modes: 'welcome' (first visit), 'edit' (profile), 'admin' (admin login)
+    // Modal modes: 'welcome' (first visit), 'edit' (profile), 'admin' (admin login),
+    // 'guest-switch' (admin-only confirmation before dropping admin and becoming a guest)
     function openEntry(mode) {
       const signedIn = !!displayName;
       usernameModal.classList.add('visible');
       usernameModal.classList.toggle('edit-mode', signedIn);
       closeModalBtn.hidden = !signedIn;
-      guestPanel.hidden = mode === 'admin';
+      guestPanel.hidden = mode === 'admin' || mode === 'guest-switch';
       adminPanel.hidden = mode !== 'admin';
-      entryError.textContent = ''; adminError.textContent = '';
+      guestSwitchPanel.hidden = mode !== 'guest-switch';
+      entryError.textContent = ''; adminError.textContent = ''; guestSwitchError.textContent = '';
       input.disabled = true; sendBtn.disabled = true;
 
       if (mode === 'admin') {
         adminPassword.value = '';
         adminUsername.focus();
+        return;
+      }
+      if (mode === 'guest-switch') {
+        guestSwitchConfirm.focus();
         return;
       }
       entryTitle.textContent = signedIn ? 'Edit profile' : 'Welcome';
@@ -786,6 +828,8 @@
       usernameInput.value = isAdmin ? displayName : username;
       usernameInput.disabled = isAdmin;
       adminLink.hidden = isAdmin;
+      // Only a signed-in admin can drop to a guest session from here
+      accountSection.hidden = !isAdmin;
       renderAvatarPreview();
       if (!isAdmin) usernameInput.focus();
     }
@@ -819,6 +863,27 @@
     adminLink.addEventListener('click', () => openEntry('admin'));
     adminBack.addEventListener('click', () => openEntry(displayName ? 'edit' : 'welcome'));
     closeModalBtn.addEventListener('click', () => { if (displayName) closeEntry(); });
+
+    // Admin -> guest downgrade. The server, not this flag flip, is what actually drops admin rights
+    // (see the 'switch to guest' handler in server.js); this only asks for confirmation and reuses the
+    // existing guest identity (name/avatar) already saved on this browser, same as any other guest.
+    switchGuestBtn.addEventListener('click', () => openEntry('guest-switch'));
+    guestSwitchCancel.addEventListener('click', () => openEntry('edit'));
+    guestSwitchConfirm.addEventListener('click', () => {
+      guestSwitchError.textContent = '';
+      if (!canAdminAct(guestSwitchError)) return;
+      const name = username || 'Guest'; // preserve the existing guest identity if one is already saved
+      guestSwitchConfirm.disabled = true;
+      emitAdmin('switch to guest', { name, avatar: userAvatar }, (res) => {
+        guestSwitchConfirm.disabled = false;
+        if (!res || !res.ok) { guestSwitchError.textContent = (res && res.error) || 'Could not switch to a guest session.'; return; }
+        adminCreds = null; // no longer an admin session; nothing left here to re-auth with
+        // Drop the remembered location so the guest identity re-validates any locked server on rejoin
+        // instead of silently keeping an admin's room membership. 'login success' follows this ack and
+        // updates isAdmin/displayName, re-renders the UI, closes this modal, and calls syncLocation().
+        currentServer = null; currentChannel = null;
+      });
+    });
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       if (!adminMenu.hidden) { closeAdminMenu(); serverSettingsBtn.focus(); }
