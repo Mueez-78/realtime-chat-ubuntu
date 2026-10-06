@@ -250,6 +250,13 @@
   .account-row-action svg { width: 16px; height: 16px; color: var(--faint); flex-shrink: 0; }
   .account-row-action:hover { border-color: var(--border-strong); background: var(--hover); }
 
+  /* ---------- Locked-server password modal ---------- */
+  .password-field { position: relative; }
+  .password-field input { padding-right: 42px; }
+  .password-toggle-btn { position: absolute; top: 0; right: 0; bottom: 0; width: 40px; display: flex; align-items: center; justify-content: center; background: none; border: none; color: var(--muted); border-radius: 0 8px 8px 0; transition: color 0.12s; }
+  .password-toggle-btn:hover { color: var(--text-2); }
+  .password-toggle-btn svg { width: 18px; height: 18px; }
+
   #toast { position: fixed; left: 50%; bottom: calc(80px + var(--safe-bottom)); transform: translateX(-50%); max-width: calc(100vw - 32px); background: #26272b; color: var(--text); border: 1px solid var(--border-strong); padding: 9px 14px; border-radius: 8px; font-size: 0.86em; box-shadow: 0 6px 16px rgba(0,0,0,0.3); opacity: 0; pointer-events: none; transition: opacity 0.18s; z-index: 200; }
   #toast.visible { opacity: 1; }
 
@@ -433,6 +440,32 @@
         </form>
         <button type="button" class="link-btn" id="admin-back">← Back</button>
       </section>
+    </div>
+  </div>
+
+  <!-- Locked-server password prompt (guests and admins alike never see the backend's response either way). -->
+  <div class="modal-overlay edit-mode" id="passcode-modal" role="dialog" aria-modal="true" aria-labelledby="passcode-title">
+    <div class="modal-card">
+      <button type="button" id="passcode-modal-close" class="icon-btn close-btn" aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M18.3 5.7a1 1 0 0 0-1.4 0L12 10.6 7.1 5.7a1 1 0 0 0-1.4 1.4l4.9 4.9-4.9 4.9a1 1 0 1 0 1.4 1.4l4.9-4.9 4.9 4.9a1 1 0 0 0 1.4-1.4L13.4 12l4.9-4.9a1 1 0 0 0 0-1.4z"/></svg>
+      </button>
+      <div class="brand">DIT Chat</div>
+      <h2 id="passcode-title">Server Locked</h2>
+      <p id="passcode-subtitle"></p>
+      <form id="passcode-form" class="modal-form" novalidate>
+        <label class="field-label" for="passcode-input">Server password</label>
+        <div class="password-field">
+          <input type="password" id="passcode-input" autocomplete="current-password" required />
+          <button type="button" class="password-toggle-btn" id="passcode-toggle" aria-label="Show password">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>
+          </button>
+        </div>
+        <div class="form-error" id="passcode-error" role="alert"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" id="passcode-cancel">Cancel</button>
+          <button type="submit" class="btn-primary" id="passcode-submit">Unlock</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -623,6 +656,17 @@
     const guestSwitchCancel = document.getElementById('guest-switch-cancel');
     const guestSwitchConfirm = document.getElementById('guest-switch-confirm');
 
+    const passcodeModal = document.getElementById('passcode-modal');
+    const passcodeModalClose = document.getElementById('passcode-modal-close');
+    const passcodeTitle = document.getElementById('passcode-title');
+    const passcodeSubtitle = document.getElementById('passcode-subtitle');
+    const passcodeForm = document.getElementById('passcode-form');
+    const passcodeInput = document.getElementById('passcode-input');
+    const passcodeToggle = document.getElementById('passcode-toggle');
+    const passcodeError = document.getElementById('passcode-error');
+    const passcodeCancel = document.getElementById('passcode-cancel');
+    const passcodeSubmit = document.getElementById('passcode-submit');
+
     const serverSettingsBtn = document.getElementById('server-settings-btn');
     const adminModal = document.getElementById('admin-modal');
     const adminModalClose = document.getElementById('admin-modal-close');
@@ -717,6 +761,9 @@
     }
     // Tabler: camera -- avatar-picker placeholder (matches the static markup in #avatar-preview's initial HTML)
     const CAMERA_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7h1a2 2 0 0 0 2 -2a1 1 0 0 1 1 -1h6a1 1 0 0 1 1 1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-9a2 2 0 0 1 2 -2"/><path d="M9 13a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"/></svg>';
+    // Tabler: eye / eye-off -- password-visibility toggle on the locked-server password modal
+    const EYE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/></svg>';
+    const EYE_OFF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.585 10.587a2 2 0 0 0 2.829 2.828"/><path d="M16.681 16.673a8.717 8.717 0 0 1 -4.681 1.327c-3.6 0 -6.6 -2 -9 -6c1.272 -2.12 2.712 -3.678 4.32 -4.674m2.86 -1.146a9.055 9.055 0 0 1 1.82 -.18c3.6 0 6.6 2 9 6c-.666 1.11 -1.379 2.067 -2.138 2.87"/><path d="M3 3l18 18"/></svg>';
     // Servers store a short emoji/text icon (backend data is unchanged); the UI shows the matching line icon.
     const SERVER_ICON_BY_ID = { 'dit-lounge': 'monogram' };
     const SERVER_ICON_BY_VALUE = {
@@ -888,6 +935,7 @@
       if (e.key !== 'Escape') return;
       if (!adminMenu.hidden) { closeAdminMenu(); serverSettingsBtn.focus(); }
       else if (adminModal.classList.contains('visible')) closeAdminModal();
+      else if (passcodeModal.classList.contains('visible')) closePasscodeModal(true);
       else if (usernameModal.classList.contains('visible') && displayName) closeEntry();
       else { closeSidebar(); closeMembers(); }
     });
@@ -1159,24 +1207,87 @@
       return true;
     }
 
-    function askPasscode(server) {
-      return prompt(`${server.name} is locked.\nEnter the server password:`);
+    // ---------- Locked-server password modal (replaces the old native prompt()) ----------
+    // The modal owns its own join attempt + retry loop: submitting calls the same joinServer()/ack
+    // flow as everywhere else (so enteredPasscodes, rate limiting and the backend's own passcode check
+    // are untouched), and a wrong password just shows an inline error and leaves the field open to
+    // retry -- it only closes on a confirmed success or an explicit Cancel/Escape/×.
+    let passcodeTarget = null;    // { server, channelId } for the join currently being attempted
+    let passcodeOnCancel = null;  // run once, only if the modal is dismissed without a successful unlock
+
+    function setPasscodeVisibility(visible) {
+      passcodeInput.type = visible ? 'text' : 'password';
+      passcodeToggle.innerHTML = visible ? EYE_OFF_ICON : EYE_ICON;
+      passcodeToggle.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
     }
+
+    function openPasscodeModal(server, channelId, onCancel) {
+      passcodeTarget = { server, channelId };
+      passcodeOnCancel = onCancel || null;
+      passcodeSubtitle.textContent = `${server.name} is locked. Enter the server password to continue.`;
+      passcodeInput.value = '';
+      setPasscodeVisibility(false);
+      passcodeError.textContent = '';
+      passcodeSubmit.disabled = false;
+      passcodeSubmit.textContent = 'Unlock';
+      passcodeModal.classList.add('visible');
+      passcodeInput.focus();
+    }
+
+    // `cancelled` distinguishes a user-dismissed modal (runs the onCancel fallback) from a close after
+    // a successful unlock (applyLocation() already ran inside the join ack; nothing left to do).
+    function closePasscodeModal(cancelled) {
+      passcodeModal.classList.remove('visible');
+      passcodeTarget = null;
+      const onCancel = passcodeOnCancel;
+      passcodeOnCancel = null;
+      if (cancelled && onCancel) onCancel();
+    }
+
+    passcodeToggle.addEventListener('click', () => setPasscodeVisibility(passcodeInput.type === 'password'));
+    passcodeCancel.addEventListener('click', () => closePasscodeModal(true));
+    passcodeModalClose.addEventListener('click', () => closePasscodeModal(true));
+
+    passcodeForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      passcodeError.textContent = '';
+      const passcode = passcodeInput.value;
+      if (!passcode) { passcodeError.textContent = 'Please enter the server password.'; return; }
+      if (!passcodeTarget) return;
+      const { server, channelId } = passcodeTarget;
+      passcodeSubmit.disabled = true;
+      passcodeSubmit.textContent = 'Unlocking…';
+      joinServer(server.id, passcode, channelId, (ok, error) => {
+        // The modal may have been closed/reassigned while this ack was in flight
+        if (!passcodeModal.classList.contains('visible')) return;
+        passcodeSubmit.disabled = false;
+        passcodeSubmit.textContent = 'Unlock';
+        if (!ok) {
+          passcodeError.textContent = error || 'Incorrect password. Please try again.';
+          passcodeInput.value = '';
+          passcodeInput.focus();
+          return;
+        }
+        closePasscodeModal(false);
+      });
+    });
 
     function switchServer(serverId) {
       if (serverId === currentServer) return;
       if (!canNavigate()) return;
       const activeServer = findServer(serverId);
-      let passcode = null;
       // Admins are let in by the backend without a password. A guest who already unlocked this server
       // earlier in the session (its passcode is remembered in `enteredPasscodes`, memory only, never
       // localStorage) reuses it silently -- only a server this session has never unlocked prompts.
       if (activeServer.isLocked && !isAdmin) {
-        passcode = enteredPasscodes.get(serverId) ?? askPasscode(activeServer);
-        if (passcode === null) return showToast('Cancelled. This server needs a password.');
+        const remembered = enteredPasscodes.get(serverId);
+        if (remembered !== undefined) {
+          return joinServer(serverId, remembered, undefined, (ok, error) => { if (!ok) showToast(error); });
+        }
+        // Server switches land on the backend default channel ('general')
+        return openPasscodeModal(activeServer, undefined, () => showToast('Cancelled. This server needs a password.'));
       }
-      // Server switches land on the backend default channel ('general'); the drawer stays open to pick a channel
-      joinServer(serverId, passcode, undefined, (ok, error) => { if (!ok) showToast(error); });
+      joinServer(serverId, null, undefined, (ok, error) => { if (!ok) showToast(error); });
     }
 
     function switchChannel(channelId) {
@@ -1197,27 +1308,33 @@
     function syncLocation() {
       if (serversState !== 'ready' || !loggedIn) return;
       const fallback = defaultServer();
-      let target, channelId, passcode = null;
 
-      if (currentServer && findServer(currentServer)) {
-        target = findServer(currentServer); channelId = currentChannel;
-        passcode = enteredPasscodes.get(target.id) ?? null;
-      } else {
-        target = findServer(localStorage.getItem('lastServerId')) || fallback;
-        const lastChannel = localStorage.getItem('lastChannelId');
-        if (target.channels.some(c => c.id === lastChannel)) channelId = lastChannel;
-        if (target.isLocked && !isAdmin) {
-          // A refresh never bypasses the lock: the passcode has to be typed again
-          passcode = enteredPasscodes.get(target.id) ?? askPasscode(target);
-          if (passcode === null) { target = fallback; channelId = undefined; }
-        }
+      // Shared by every branch below: join, and on failure fall back to the first unlocked server
+      function enterWithFallback(target, channelId, passcode) {
+        joinServer(target.id, passcode, channelId, (ok, error) => {
+          if (ok) return;
+          showToast(error);
+          if (target.id !== fallback.id) joinServer(fallback.id, null, undefined, () => {});
+        });
       }
 
-      joinServer(target.id, passcode, channelId, (ok, error) => {
-        if (ok) return;
-        showToast(error);
-        if (target.id !== fallback.id) joinServer(fallback.id, null, undefined, () => {});
-      });
+      if (currentServer && findServer(currentServer)) {
+        const target = findServer(currentServer);
+        return enterWithFallback(target, currentChannel, enteredPasscodes.get(target.id) ?? null);
+      }
+
+      const target = findServer(localStorage.getItem('lastServerId')) || fallback;
+      let channelId;
+      const lastChannel = localStorage.getItem('lastChannelId');
+      if (target.channels.some(c => c.id === lastChannel)) channelId = lastChannel;
+
+      if (target.isLocked && !isAdmin) {
+        // A refresh never bypasses the lock: the passcode has to be typed again
+        const remembered = enteredPasscodes.get(target.id);
+        if (remembered !== undefined) return enterWithFallback(target, channelId, remembered);
+        return openPasscodeModal(target, channelId, () => enterWithFallback(fallback, undefined, null));
+      }
+      enterWithFallback(target, channelId, null);
     }
 
     // ==========================================
