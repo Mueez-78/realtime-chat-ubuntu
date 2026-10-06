@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="theme-color" content="#0e0f11" />
 <meta name="color-scheme" content="dark" />
-<title>DIT Chat</title>
+<title>Chit Chat</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a84ff'/%3E%3Cpath d='M9 10h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-8l-5 4v-4H9a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z' fill='%23fff'/%3E%3C/svg%3E" />
 <style>
   /* Palette: near-black + dark gray panels + white text, with a restrained iOS-style blue accent */
@@ -280,6 +280,10 @@
   /* ---------- Locked-server password modal ---------- */
   .password-field { position: relative; }
   .password-field input { padding-right: 42px; }
+  /* Chromium Edge renders its own native reveal-password icon (::-ms-reveal) on top of our custom
+     .password-toggle-btn, producing two eye icons in the same field. Chrome/Firefox/Safari don't do
+     this, so this rule is a no-op there; suppressing it is what makes our button the only control. */
+  .password-field input::-ms-reveal { display: none; }
   .password-toggle-btn { position: absolute; top: 0; right: 0; bottom: 0; width: 40px; display: flex; align-items: center; justify-content: center; background: none; border: none; color: var(--muted); border-radius: 0 8px 8px 0; transition: color 0.12s; }
   .password-toggle-btn:hover { color: var(--text-2); }
   .password-toggle-btn svg { width: 18px; height: 18px; }
@@ -1663,7 +1667,7 @@
       if (!server) return;
       openConfirmModal({
         title: 'Delete all server messages?',
-        body: `This will delete all messages from every channel in ${server.name}. This action affects every channel in this server. Admins will still be able to view the deleted messages.`,
+        body: `This will delete all messages from every channel in ${server.name}. This action affects every channel in this server.`,
         confirmLabel: 'Delete All Server Messages',
         onConfirm: (done) => {
           if (!socket.connected || !loggedIn) return done('Reconnecting… please wait a moment and try again.');
