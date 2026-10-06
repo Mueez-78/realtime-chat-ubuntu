@@ -28,7 +28,11 @@
   }
 
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; height: 100%; }
+  /* touch-action: manipulation disables the browser's own double-tap-to-zoom gesture (and the legacy
+     ~300ms tap delay) while still permitting panning/scrolling and pinch-zoom. It does not intercept
+     or suppress touchstart/touchmove/touchend -- the long-press message-actions gesture (see
+     attachLongPress() below) keeps working exactly as before. */
+  html, body { margin: 0; padding: 0; height: 100%; touch-action: manipulation; }
   body {
     font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", sans-serif;
     background: var(--bg-chat); color: var(--text);
