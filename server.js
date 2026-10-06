@@ -299,6 +299,13 @@ function broadcastMessageDeleted(serverId, channelId, msgId, text, deletedAt, de
   }
 }
 
+// Realtime fan-out for a HARD-deleted message (see the 'delete message permanently' handler below).
+// Unlike broadcastMessageDeleted(), the payload is identical for every recipient including admins --
+// the row is gone from SQLite, so there is nothing left to shape per-recipient.
+function broadcastMessagePurged(serverId, channelId, msgId) {
+  io.to(getChannelRoom(serverId, channelId)).emit('message purged', { id: msgId });
+}
+
 // Realtime fan-out for one freshly-sent message. Only the embedded `replyTo` preview needs shaping per
 // recipient (a brand new message is never itself already-deleted); `replyRow` is whatever the
 // 'chat message' handler already resolved while validating the reply target, or null if this message
@@ -798,6 +805,30 @@ io.on('connection', (socket) => {
         if (this.changes === 0) return reply({ ok: false, error: 'That message no longer exists.' });
         console.log(`[MOD] delete message: socket=${socket.id} user=${JSON.stringify(user.username)} msgId=${msgId} serverId=${row.serverId} channelId=${row.channelId} isAdmin=${user.isAdmin} ownMessage=${isOwnMessage}`);
         broadcastMessageDeleted(row.serverId, row.channelId, msgId, row.text, deletedAt, deletedBy);
+        reply({ ok: true });
+      });
+    });
+  });
+
+  // Admin-only HARD delete: physically removes the row, unlike 'delete message' above (which only
+  // sets deletedAt/deletedBy and keeps the row so admins can still see it). Works on any message --
+  // already soft-deleted or not -- an admin may want to purge either. No schema change: this is a
+  // plain DELETE against the existing table, not a new column or state.
+  socket.on('delete message permanently', (msgId, ack) => {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const adminUser = requireAdmin(reply, 'delete message permanently');
+    if (!adminUser) return;
+    if (!Number.isSafeInteger(msgId) || msgId <= 0) return reply({ ok: false, error: 'Invalid message.' });
+
+    db.get(`SELECT serverId, channelId FROM messages WHERE id = ?`, [msgId], (err, row) => {
+      if (err) { console.error('delete message permanently: lookup failed:', err.message); return reply({ ok: false, error: 'Could not delete the message. Please try again.' }); }
+      if (!row) return reply({ ok: false, error: 'That message no longer exists.' });
+
+      db.run(`DELETE FROM messages WHERE id = ?`, [msgId], function (err) {
+        if (err) { console.error('delete message permanently: delete failed:', err.message); return reply({ ok: false, error: 'Could not delete the message. Please try again.' }); }
+        if (this.changes === 0) return reply({ ok: false, error: 'That message no longer exists.' });
+        console.log(`[MOD] permanent delete: socket=${socket.id} user=${JSON.stringify(adminUser.username)} msgId=${msgId} serverId=${row.serverId} channelId=${row.channelId}`);
+        broadcastMessagePurged(row.serverId, row.channelId, msgId);
         reply({ ok: true });
       });
     });

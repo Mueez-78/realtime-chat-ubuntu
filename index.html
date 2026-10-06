@@ -630,13 +630,15 @@
 
   <div id="toast" role="status"></div>
 
-  <!-- Per-message action menu (Reply / Delete / Cancel) -- shared by the desktop "⋯" button, right-click,
-       and the mobile long-press gesture. Repositioned and repopulated at open time; see
-       openMessageActions() below. Authorization for Delete is re-checked on the backend regardless of
-       which items this happens to show. -->
+  <!-- Per-message action menu (Reply / Delete / Delete Permanently / Cancel) -- shared by the desktop
+       "⋯" button, right-click, and the mobile long-press gesture. Repositioned and repopulated at open
+       time; see openMessageActions() below. Delete is the existing soft delete (own message, or any
+       message as admin); Delete Permanently is admin-only and physically removes the row. Authorization
+       for both is re-checked on the backend regardless of which items this happens to show. -->
   <div class="admin-menu msg-actions-menu" id="msg-actions-menu" role="menu" aria-label="Message actions" hidden>
     <button type="button" role="menuitem" id="msg-action-reply">Reply</button>
     <button type="button" role="menuitem" id="msg-action-delete" class="admin-menu-danger">Delete</button>
+    <button type="button" role="menuitem" id="msg-action-purge" class="admin-menu-danger">Delete Permanently</button>
     <button type="button" role="menuitem" id="msg-action-cancel">Cancel</button>
   </div>
 
@@ -646,7 +648,7 @@
     // Bump this string whenever the frontend changes meaningfully. Printed on load so a stale cached
     // copy (browser cache or an intermediate proxy) can be spotted from the browser console instead of
     // guessed at -- check this against the value in the deployed index.html source.
-    const APP_BUILD = 'phase9-2026-10-06';
+    const APP_BUILD = 'phase10-2026-10-06b';
     console.log('[DIT Chat] build', APP_BUILD);
 
     const socket = io();
@@ -686,6 +688,7 @@
     const msgActionsMenu = document.getElementById('msg-actions-menu');
     const msgActionReply = document.getElementById('msg-action-reply');
     const msgActionDelete = document.getElementById('msg-action-delete');
+    const msgActionPurge = document.getElementById('msg-action-purge');
     const msgActionCancel = document.getElementById('msg-action-cancel');
 
     const appContainer = document.getElementById('app-container');
@@ -2006,14 +2009,20 @@
       el.addEventListener('touchcancel', cancel);
     }
 
-    // ---------- Per-message actions menu (Reply / Delete / Cancel) ----------
+    // ---------- Per-message actions menu (Reply / Delete / Delete Permanently / Cancel) ----------
     // Shared by the desktop "⋯" button, right-click, and the mobile long-press gesture. Positioned in
     // JS (it's `position: fixed`, not anchored like .admin-menu) at the point the gesture happened,
-    // then clamped so it never renders off-screen.
-    function openMessageActions(msgId, isMine, x, y) {
+    // then clamped so it never renders off-screen. `isDeleted` is read live from the message's own DOM
+    // state at gesture time (not baked into a closure at render time) so it stays correct even if the
+    // message was soft-deleted in realtime after it was first rendered -- see appendMessage() below.
+    function openMessageActions(msgId, isMine, isDeleted, x, y) {
       activeMsgActionsTarget = msgId;
       activeMsgActionsIsMine = isMine;
-      msgActionDelete.hidden = !(isAdmin || isMine);
+      // A deleted message can't be replied to or soft-deleted again; an admin may still purge it (or
+      // any normal message) permanently -- that's the only item never gated on ownership, only isAdmin.
+      msgActionReply.hidden = isDeleted;
+      msgActionDelete.hidden = isDeleted || !(isAdmin || isMine);
+      msgActionPurge.hidden = !isAdmin;
       msgActionsMenu.hidden = false;
       msgActionsMenu.style.left = '0px';
       msgActionsMenu.style.top = '0px';
@@ -2024,7 +2033,7 @@
       left = Math.max(margin, left); top = Math.max(margin, top);
       msgActionsMenu.style.left = left + 'px';
       msgActionsMenu.style.top = top + 'px';
-      msgActionReply.focus();
+      (msgActionReply.hidden ? (msgActionDelete.hidden ? msgActionPurge : msgActionDelete) : msgActionReply).focus();
     }
     function closeMessageActions() {
       msgActionsMenu.hidden = true;
@@ -2041,7 +2050,29 @@
       closeMessageActions();
       if (id != null) confirmDeleteMessage(id, isMine && !isAdmin);
     });
+    msgActionPurge.addEventListener('click', () => {
+      const id = activeMsgActionsTarget;
+      closeMessageActions();
+      if (id != null) confirmPurgeMessage(id);
+    });
     msgActionCancel.addEventListener('click', closeMessageActions);
+
+    // Admin-only hard delete: physically removes the row (see the 'delete message permanently' handler
+    // in server.js). Separate from confirmDeleteMessage()'s soft delete -- different backend event,
+    // different (stronger) wording, and the backend re-checks admin rights regardless of this UI.
+    function confirmPurgeMessage(msgId) {
+      openConfirmModal({
+        title: 'Permanently delete this message?',
+        body: 'This cannot be undone. The message is completely removed from the database for everyone, including admins.',
+        confirmLabel: 'Delete Permanently',
+        onConfirm: (done) => {
+          emitAdmin('delete message permanently', msgId, (res) => {
+            if (!res || res.ok === false) return done((res && res.error) || 'Could not permanently delete the message.');
+            done();
+          });
+        },
+      });
+    }
 
     // ---------- Reply preview (shown above the composer until sent, cancelled, or the channel changes) ----------
     function startReply(id) {
@@ -2114,11 +2145,13 @@
         if (data.isAdmin && !knownAdmins.has(data.user)) { knownAdmins.add(data.user); membersChanged = true; }
         if (membersChanged && members.includes(data.user)) renderMembers();
 
-        // A deleted message can't be replied to or deleted again. Reply is offered to anyone;
-        // Delete inside the same menu is only ever shown for an admin or the message's own sender --
-        // the backend re-checks ownership/admin rights on every delete regardless of why this button
-        // is or isn't shown.
-        if (!data.deleted) {
+        // A deleted message can't be replied to or soft-deleted again, but an admin viewing one (it
+        // still has its content, per the branch above) can still permanently delete it -- so the
+        // trigger stays available whenever there's something to act on: a live message, or a deleted
+        // one an admin can see. `isDeletedNow` is read from the li's own class at gesture time (not
+        // baked into these closures) so it stays correct if the message gets soft-deleted later while
+        // still on screen -- see the 'message deleted' handler below, which no longer removes this button.
+        if (!data.deleted || isAdmin) {
           const actionsBtn = document.createElement('button');
           actionsBtn.type = 'button';
           actionsBtn.className = 'msg-actions-btn';
@@ -2126,19 +2159,20 @@
           actionsBtn.title = 'Message actions';
           actionsBtn.setAttribute('aria-label', actionsBtn.title);
           actionsBtn.setAttribute('aria-haspopup', 'menu');
+          const openForLi = (x, y) => openMessageActions(data.id, isMe, li.classList.contains('message-deleted'), x, y);
           actionsBtn.onclick = (e) => {
             e.stopPropagation();
             const rect = actionsBtn.getBoundingClientRect();
-            openMessageActions(data.id, isMe, rect.right, rect.bottom + 4);
+            openForLi(rect.right, rect.bottom + 4);
           };
           li.appendChild(actionsBtn);
           attachLongPress(li, () => {
             const rect = li.getBoundingClientRect();
-            openMessageActions(data.id, isMe, rect.left + rect.width / 2, rect.top + rect.height / 2);
+            openForLi(rect.left + rect.width / 2, rect.top + rect.height / 2);
           });
           li.addEventListener('contextmenu', (e) => {
             e.preventDefault();
-            openMessageActions(data.id, isMe, e.clientX, e.clientY);
+            openForLi(e.clientX, e.clientY);
           });
         }
       }
@@ -2159,10 +2193,11 @@
         // The following message lost its group header, so show its own avatar/name again
         if (next && next.classList.contains('grouped')) next.classList.remove('grouped');
       } else {
-        // Admin: the original content is already showing -- just mark it deleted and remove the button
+        // Admin: the original content is already showing -- mark it deleted. The actions button stays
+        // (an admin can still permanently delete it); openMessageActions() reads the now-added
+        // .message-deleted class live, so it correctly hides Reply/Delete and offers only Delete
+        // Permanently the next time this button/long-press/right-click is used.
         msgEl.classList.add('message-deleted');
-        const actionsBtn = msgEl.querySelector('.msg-actions-btn');
-        if (actionsBtn) actionsBtn.remove();
         const meta = msgEl.querySelector('.msg-meta');
         if (meta && !meta.querySelector('.deleted-tag')) fillDeletedMeta(meta, data);
       }
@@ -2177,6 +2212,26 @@
           const text = ref.querySelector('.reply-ref-text');
           if (text) text.textContent = '(message deleted)';
         }
+      });
+    });
+
+    // A permanent (hard) delete: the row is gone from SQLite for everyone, admins included, so unlike
+    // 'message deleted' there's no admin-only branch -- just remove the element outright.
+    socket.on('message purged', (data) => {
+      const msgEl = document.getElementById('msg-' + data.id);
+      if (msgEl) {
+        const next = msgEl.nextElementSibling;
+        msgEl.remove();
+        // The following message may have lost its group header, so show its own avatar/name again
+        if (next && next.classList && next.classList.contains('grouped')) next.classList.remove('grouped');
+      }
+      if (activeMsgActionsTarget === data.id) closeMessageActions();
+      if (pendingReplyId === data.id) cancelReply();
+      // Unlike a soft delete, this is the same "unavailable" outcome for every recipient, admins
+      // included -- the row genuinely no longer exists for anyone to see.
+      document.querySelectorAll('.reply-ref[data-ref-id="' + data.id + '"]').forEach((ref) => {
+        ref.className = 'reply-ref reply-ref-unavailable';
+        ref.textContent = 'Original message unavailable';
       });
     });
 
